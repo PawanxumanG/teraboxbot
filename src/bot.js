@@ -30,20 +30,31 @@ function createBot() {
 
   const bot = new Telegraf(config.BOT_TOKEN, botOptions);
 
+  // Global error handler
+  bot.catch((err, ctx) => {
+    console.error(`[Telegraf Error] for ${ctx.updateType}:`, err);
+  });
+
   // Middleware: Register / Update user in Firebase on every message
   bot.use(async (ctx, next) => {
     if (ctx.from) {
-      await database.initUser(ctx.from.id, {
-        username: ctx.from.username,
-        first_name: ctx.from.first_name,
-        last_name: ctx.from.last_name,
-      });
+      console.log(`[Bot] Incoming update ${ctx.updateType} from @${ctx.from.username || ctx.from.id}`);
+      try {
+        await database.initUser(ctx.from.id, {
+          username: ctx.from.username,
+          first_name: ctx.from.first_name,
+          last_name: ctx.from.last_name,
+        });
+      } catch (e) {
+        console.warn('[Bot Middleware] initUser error (continuing):', e.message);
+      }
     }
     return next();
   });
 
   // /start command
   bot.start(async (ctx) => {
+    console.log(`[Bot] /start received from user ${ctx.from ? ctx.from.id : 'unknown'}`);
     const userId = ctx.from.id;
     const name = ctx.from.first_name || 'User';
     const quota = await database.checkUserQuota(userId);

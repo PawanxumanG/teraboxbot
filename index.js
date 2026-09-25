@@ -23,22 +23,35 @@ async function main() {
     console.log(`📡 Health Check URL: http://localhost:${config.PORT}/health`);
   });
 
-  // 3. Launch Bot
-  try {
-    const botInfo = await bot.telegram.getMe();
-    console.log(`🤖 Telegram Bot Connected: @${botInfo.username} (${botInfo.first_name})`);
-    console.log(`💳 ShinzoAuto UPI VPA: ${config.UPI.VPA}`);
-    console.log(`🔥 Firebase RTDB: ${config.FIREBASE_DB_URL}`);
-    console.log(`⚡ VIP Plans: 24h (₹${config.PLANS['24h'].amount}), 30d (₹${config.PLANS['30d'].amount})`);
+  // 3. Launch Bot with resilient auto-reconnect
+  const startPolling = async (retryCount = 0) => {
+    try {
+      const botInfo = await bot.telegram.getMe();
+      console.log(`🤖 Telegram Bot Connected: @${botInfo.username} (${botInfo.first_name})`);
+      console.log(`💳 ShinzoAuto UPI VPA: ${config.UPI.VPA}`);
+      console.log(`🔥 Firebase RTDB: ${config.FIREBASE_DB_URL}`);
+      console.log(`⚡ VIP Plans: 24h (₹${config.PLANS['24h'].amount}), 30d (₹${config.PLANS['30d'].amount})`);
 
-    // Start polling
-    await bot.launch({
-      dropPendingUpdates: true,
-    });
-    console.log('✅ Bot polling is actively running and ready to handle user links!');
-  } catch (err) {
-    console.error('❌ Failed to start bot:', err.message);
-  }
+      // Ensure any webhook is cleared before polling
+      await bot.telegram.deleteWebhook({ drop_pending_updates: false }).catch(() => {});
+
+      console.log('🔄 Starting Telegram long-polling...');
+      bot.launch({
+        dropPendingUpdates: false,
+      }).then(() => {
+        console.log('🛑 Bot polling stopped.');
+      }).catch(async (err) => {
+        console.error(`⚠️ Polling error (${err.message}). Reconnecting in 3s...`);
+        setTimeout(() => startPolling(retryCount + 1), 3000);
+      });
+      console.log('✅ Bot polling is actively running and ready to handle user messages!');
+    } catch (err) {
+      console.error(`❌ Failed to start bot (${err.message}). Retrying in 5s...`);
+      setTimeout(() => startPolling(retryCount + 1), 5000);
+    }
+  };
+
+  await startPolling();
 
   // Graceful shutdown
   const stopSignals = ['SIGINT', 'SIGTERM'];
