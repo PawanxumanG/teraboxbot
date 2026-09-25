@@ -2,7 +2,7 @@ const axios = require('axios');
 const { URL } = require('url');
 const config = require('./config');
 
-// Recognized TeraBox domains
+// Recognized TeraBox and redirector domains
 const TERABOX_DOMAINS = [
   'terabox.com',
   'www.terabox.com',
@@ -28,6 +28,34 @@ const TERABOX_DOMAINS = [
   'www.momerybox.com',
   'tibibox.com',
   'www.tibibox.com',
+  'gibibox.com',
+  'www.gibibox.com',
+  'terabox.fun',
+  'www.terabox.fun',
+  'terasharelink.com',
+  'www.terasharelink.com',
+  'terafileshare.com',
+  'www.terafileshare.com',
+  '1024nephobox.com',
+  'www.1024nephobox.com',
+  'terasharefile.com',
+  'www.terasharefile.com',
+  'teraboxurl.com',
+  'www.teraboxurl.com',
+  'teradownloader.com',
+  'www.teradownloader.com',
+  'dubox.com',
+  'www.dubox.com',
+  'terabox.me',
+  'www.terabox.me',
+  'nowplaytoc.com',
+  'www.nowplaytoc.com',
+  'nowplaylee.com',
+  'www.nowplaylee.com',
+  'nowplaygo.com',
+  'www.nowplaygo.com',
+  'hugeboxlightning.com',
+  'hugeboxstack.com',
 ];
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv', '.m4v', '.ts', '.3gp'];
@@ -44,7 +72,16 @@ function formatBytes(bytes) {
 }
 
 /**
- * Check if a URL matches any TeraBox domain
+ * Extract all URLs from a text message
+ */
+function extractUrlsFromText(text) {
+  if (!text) return [];
+  const urlRegex = /https?:\/\/[^\s"'`<>]+/gi;
+  return text.match(urlRegex) || [];
+}
+
+/**
+ * Check if a URL matches any TeraBox or known redirector domain
  */
 function isValidTeraBoxUrl(urlString) {
   try {
@@ -53,8 +90,8 @@ function isValidTeraBoxUrl(urlString) {
     const isDomainMatch = TERABOX_DOMAINS.some(
       (d) => host === d || host.endsWith('.' + d)
     );
-    if (!isDomainMatch) return false;
-    return parsed.pathname.includes('/s/') || parsed.search.includes('surl=');
+    if (isDomainMatch) return true;
+    return parsed.pathname.includes('/s/') || parsed.search.includes('surl=') || parsed.search.includes('shorturl=');
   } catch {
     return false;
   }
@@ -68,16 +105,87 @@ function extractShortCode(urlString) {
     const parsed = new URL(urlString.trim());
     if (parsed.searchParams.has('surl')) {
       let code = parsed.searchParams.get('surl');
-      if (code.startsWith('1')) code = code.slice(1);
+      if (code.startsWith('1') && code.length > 22) code = code.slice(1);
+      return code;
+    }
+    if (parsed.searchParams.has('shorturl')) {
+      let code = parsed.searchParams.get('shorturl');
+      if (code.startsWith('1') && code.length > 22) code = code.slice(1);
       return code;
     }
     const match = parsed.pathname.match(/\/s\/(?:1)?([a-zA-Z0-9_-]+)/);
     if (match && match[1]) {
-      return match[1];
+      let code = match[1];
+      if (code.startsWith('1') && code.length > 22) code = code.slice(1);
+      return code;
+    }
+    const pathMatch = parsed.pathname.match(/^\/([a-zA-Z0-9_-]{20,})$/);
+    if (pathMatch && pathMatch[1]) {
+      let code = pathMatch[1];
+      if (code.startsWith('1') && code.length > 22) code = code.slice(1);
+      return code;
     }
     return null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Universal Link Resolver:
+ * - Checks direct TeraBox domains & extract surl
+ * - Resolves shorteners / redirectors (nowplaytoc, bit.ly, tinyurl, etc.)
+ * - Parses Nuxt data, meta refresh, window.location, and HTML for embedded TeraBox links
+ */
+async function resolveToTeraBoxSurl(inputUrl) {
+  let url = inputUrl.trim();
+  let surl = extractShortCode(url);
+  if (surl) return { surl, finalUrl: url };
+
+  try {
+    const res = await axios.get(url, {
+      maxRedirects: 5,
+      timeout: 12000,
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    });
+
+    const finalUrl = res.request?.res?.responseUrl || res.config?.url || url;
+    surl = extractShortCode(finalUrl);
+    if (surl) return { surl, finalUrl };
+
+    const body = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+
+    const surlMatch =
+      body.match(/\/s\/(?:1)?([a-zA-Z0-9_-]{15,})/i) ||
+      body.match(/[?&]surl=(?:1)?([a-zA-Z0-9_-]{15,})/i) ||
+      body.match(/["']surl["']\s*:\s*["'](?:1)?([a-zA-Z0-9_-]{15,})["']/i) ||
+      body.match(/["']shorturl["']\s*:\s*["'](?:1)?([a-zA-Z0-9_-]{15,})["']/i);
+
+    if (surlMatch && surlMatch[1]) {
+      let code = surlMatch[1];
+      if (code.startsWith('1') && code.length > 22) code = code.slice(1);
+      return { surl: code, finalUrl };
+    }
+
+    const teraboxUrlMatch = body.match(
+      /https?:\/\/[a-zA-Z0-9_\-\.]*(?:terabox|1024tera|mirrobox|nephobox|4funbox|momerybox|tibibox|freeterabox|gibibox|dubox)[a-zA-Z0-9_\-\.]*\/[a-zA-Z0-9_\-\/?=&]+/i
+    );
+    if (teraboxUrlMatch && teraboxUrlMatch[0]) {
+      const extracted = extractShortCode(teraboxUrlMatch[0]);
+      if (extracted) return { surl: extracted, finalUrl: teraboxUrlMatch[0] };
+    }
+
+    if (body.includes('"NO_DATA"') || body.includes('Link Expired') || body.includes('Deleted')) {
+      return { surl: null, error: '⚠️ The shared shortlink has expired or been removed by its creator.' };
+    }
+
+    return { surl: null, error: 'Could not find an active TeraBox destination from this link.' };
+  } catch (err) {
+    return { surl: null, error: `Failed to resolve link (${err.message}).` };
   }
 }
 
@@ -381,22 +489,17 @@ async function extractViaPublicGateways(surl) {
  * @param {string} password 
  */
 async function extractTeraBox(rawUrl, password = '') {
-  if (!isValidTeraBoxUrl(rawUrl)) {
+  // First resolve any shortlink or redirect to a surl
+  const resolved = await resolveToTeraBoxSurl(rawUrl);
+  if (!resolved.surl) {
     return {
       success: false,
-      error: 'Invalid TeraBox URL format. Please provide a valid link from terabox.com, teraboxapp.com, or 1024tera.com.',
+      error: resolved.error || 'Invalid TeraBox URL format. Please provide a valid link from terabox.com, teraboxapp.com, 1024tera.com, or supported shortlinks.',
     };
   }
 
-  const surl = extractShortCode(rawUrl);
-  if (!surl) {
-    return {
-      success: false,
-      error: 'Could not extract short code (surl) from the provided link.',
-    };
-  }
-
-  console.log(`[Extractor] Resolving TeraBox link for surl: ${surl}...`);
+  const surl = resolved.surl;
+  console.log(`[Extractor] Resolving TeraBox link for surl: ${surl} (source: ${rawUrl})...`);
 
   // Try Strategy 1: Direct Native Authenticated Scraper (Fastest, zero proxy lag)
   let files = await extractViaNativeWeb(surl);
@@ -423,10 +526,10 @@ async function extractTeraBox(rawUrl, password = '') {
   // Resolve direct redirect links for the first few files
   for (let i = 0; i < Math.min(files.length, 3); i++) {
     if (files[i].download_link && files[i].download_link.includes('pcs.1024terabox.com')) {
-      const resolved = await resolveDirectLink(files[i].download_link);
-      if (resolved) {
-        files[i].direct_link = resolved;
-        files[i].stream_link = resolved;
+      const direct = await resolveDirectLink(files[i].download_link);
+      if (direct) {
+        files[i].direct_link = direct;
+        files[i].stream_link = direct;
       }
     }
   }
@@ -440,8 +543,11 @@ async function extractTeraBox(rawUrl, password = '') {
 }
 
 module.exports = {
+  TERABOX_DOMAINS,
   isValidTeraBoxUrl,
   extractShortCode,
+  extractUrlsFromText,
+  resolveToTeraBoxSurl,
   formatBytes,
   isVideoFile,
   extractTeraBox,

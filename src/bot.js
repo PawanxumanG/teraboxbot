@@ -254,9 +254,10 @@ function createBot() {
     );
   });
 
-  // Message Handler: Links and UTR inputs
-  bot.on('text', async (ctx) => {
-    const text = ctx.message.text.trim();
+  // Message Handler: Links, Captions, and UTR inputs
+  bot.on(['text', 'caption'], async (ctx) => {
+    const text = (ctx.message.text || ctx.message.caption || '').trim();
+    if (!text) return;
     const userId = ctx.from.id;
     const session = getSession(userId);
 
@@ -275,18 +276,27 @@ function createBot() {
       }
     }
 
-    // 2. Check if text contains a TeraBox link
-    if (extractor.isValidTeraBoxUrl(text)) {
-      return handleTeraBoxLink(ctx, text);
+    // 2. Extract any URL from text or caption
+    const urls = extractor.extractUrlsFromText(text);
+    if (urls.length > 0) {
+      return handleTeraBoxLink(ctx, urls[0]);
     }
 
-    // Default response for unmatched text
+    // 3. Fallback check for bare shortcodes or TeraBox links without scheme
+    if (extractor.isValidTeraBoxUrl(text) || text.startsWith('terabox.com') || text.startsWith('1024tera.com')) {
+      const fullUrl = text.startsWith('http') ? text : `https://${text}`;
+      return handleTeraBoxLink(ctx, fullUrl);
+    }
+
+    // Default response for non-URL messages
     await ctx.reply(
       `🤖 *Send me any TeraBox link to download or stream!*\n\n` +
-      `Supported domains include:\n` +
+      `Supported domains & shortlinks include:\n` +
       `• \`terabox.com\`, \`teraboxapp.com\`\n` +
-      `• \`1024tera.com\`, \`teraboxshare.com\`\n` +
-      `• \`mirrobox.com\`, \`4funbox.com\`, \`nephobox.com\``,
+      `• \`1024tera.com\`, \`1024terabox.com\`\n` +
+      `• \`teraboxshare.com\`, \`teraboxlink.com\`\n` +
+      `• \`mirrobox.com\`, \`4funbox.com\`, \`nephobox.com\`\n` +
+      `• \`nowplaytoc.com\`, \`bit.ly\`, and all TeraBox redirectors`,
       {
         parse_mode: 'Markdown',
         reply_markup: {
