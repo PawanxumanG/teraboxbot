@@ -120,8 +120,21 @@ async function deliverFile(ctx, file, quota) {
     );
   }
 
-  // Check if file is small enough for direct Telegram upload
-  const canDirectUpload = sizeBytes > 0 && sizeBytes <= config.TELEGRAM_MAX_DIRECT_UPLOAD_BYTES;
+  const isDirectBinaryStream = Boolean(
+    dlink &&
+    (
+      dlink.includes('pcs.1024terabox.com') ||
+      dlink.includes('data.1024terabox.com') ||
+      dlink.includes('.baidupcs.com') ||
+      dlink.includes('workers.dev') ||
+      dlink.includes('/file/')
+    ) &&
+    !dlink.includes('/sharing/link') &&
+    !dlink.includes('?fid=')
+  );
+
+  // Check if file is small enough for direct Telegram upload and has a raw binary stream
+  const canDirectUpload = sizeBytes > 0 && sizeBytes <= config.TELEGRAM_MAX_DIRECT_UPLOAD_BYTES && isDirectBinaryStream;
 
   if (canDirectUpload) {
     // Direct chunked download + Telegram upload
@@ -194,21 +207,32 @@ async function deliverFile(ctx, file, quota) {
     } catch (err) {
       console.error('[Downloader] Direct upload error:', err.message);
       // Fallback to providing high-speed direct download link
-      await ctx.reply(
+      const fallbackCaption =
         `⚡ *Direct Download Ready!*\n\n` +
         `📁 *File:* \`${filename}\`\n` +
         `📦 *Size:* ${sizeFormatted}\n\n` +
-        `Direct Telegram transfer encountered a network timeout. You can download or stream the file directly below without speed limits!`,
-        {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: '⚡ Instant Direct Download', url: dlink }],
-              ...(file.stream_link ? [[{ text: '▶️ Stream Online / VLC', url: file.stream_link }]] : []),
-            ],
-          },
-        }
-      );
+        `Click below to download or stream the file directly without speed limits!`;
+
+      const fallbackKeyboard = [
+        [{ text: '⚡ Instant Direct Download', url: dlink }],
+        ...(file.stream_link ? [[{ text: '▶️ Stream Online / VLC', url: file.stream_link }]] : []),
+      ];
+
+      if (file.thumbnail) {
+        try {
+          await ctx.replyWithPhoto(file.thumbnail, {
+            caption: fallbackCaption,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: fallbackKeyboard },
+          });
+          return;
+        } catch {}
+      }
+
+      await ctx.reply(fallbackCaption, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: fallbackKeyboard },
+      });
     } finally {
       // Clean up temp file
       if (downloadedFile && fs.existsSync(downloadedFile.filePath)) {
@@ -218,7 +242,7 @@ async function deliverFile(ctx, file, quota) {
       }
     }
   } else {
-    // For large files (>50MB up to 2GB)
+    // For direct links or large files (>50MB up to 2GB)
     const caption =
       `🎉 *TeraBox File Unlocked!*\n\n` +
       `📁 *Filename:* \`${filename}\`\n` +
@@ -227,16 +251,29 @@ async function deliverFile(ctx, file, quota) {
       `🛡️ *Status:* Ads Bypassed & Direct Link Extracted\n\n` +
       `_Click the button below to download at full speed in your browser, IDM, or ADM!_`;
 
+    const keyboard = [
+      [{ text: '⚡ High-Speed Direct Download', url: dlink }],
+      ...(isVideo && file.stream_link
+        ? [[{ text: '▶️ Watch Video Stream Online', url: file.stream_link }]]
+        : []),
+      [{ text: '👑 Upgrade to VIP (Unlimited & Faster)', callback_data: 'upgrade_menu' }],
+    ];
+
+    if (file.thumbnail) {
+      try {
+        await ctx.replyWithPhoto(file.thumbnail, {
+          caption,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: keyboard },
+        });
+        return;
+      } catch {}
+    }
+
     await ctx.reply(caption, {
       parse_mode: 'Markdown',
       reply_markup: {
-        inline_keyboard: [
-          [{ text: '⚡ High-Speed Direct Download', url: dlink }],
-          ...(isVideo && file.stream_link
-            ? [[{ text: '▶️ Watch Video Stream Online', url: file.stream_link }]]
-            : []),
-          [{ text: '👑 Upgrade to VIP (Unlimited & Faster)', callback_data: 'upgrade_menu' }],
-        ],
+        inline_keyboard: keyboard,
       },
     });
   }

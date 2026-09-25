@@ -39,6 +39,7 @@ jobs:
           UPI_VPA: ${{ secrets.UPI_VPA || 'pawanponnam@okicici' }}
           UPI_NAME: ${{ secrets.UPI_NAME || 'TeraBoxBot' }}
           ADMIN_IDS: ${{ secrets.ADMIN_IDS || '8730987422' }}
+          TERABOX_NDUS: ${{ secrets.TERABOX_NDUS || 'YulOpexteHuig4PkWm4Ljay-xF87frJM7uzKGmOY' }}
           PORT: 3000
         run: |
           echo "🚀 Starting 24/7 TeraBox Telegram Bot..."

@@ -58,7 +58,7 @@ module.exports = {
 
   // Optional TeraBox cookies for fallback / private share authentication
   COOKIE_JSON: process.env.COOKIE_JSON || '',
-  TERABOX_NDUS: process.env.TERABOX_NDUS || '',
+  TERABOX_NDUS: process.env.TERABOX_NDUS || 'YulOpexteHuig4PkWm4Ljay-xF87frJM7uzKGmOY',
 
   // Cloudflare Proxy Base URL
   PROXY_BASE_URL: process.env.PROXY_BASE_URL || 'https://tbx-proxy.shakir-ansarii075.workers.dev/',

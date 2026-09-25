@@ -181,103 +181,141 @@ async function extractViaProxy(surl, password = '') {
 }
 
 /**
- * Strategy 2: Direct TeraBox Web API & Token Scraper
+ * Strategy 1: Direct Authenticated TeraBox Web API & Token Scraper with Folder Expansion
  */
 async function extractViaNativeWeb(surl) {
   try {
-    const userAgent =
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-    const initialUrl = `https://www.terabox.app/sharing/link?surl=${surl}`;
-
-    const pageRes = await axios.get(initialUrl, {
-      headers: {
-        'User-Agent': userAgent,
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      timeout: 20000,
-    });
-
-    const html = pageRes.data || '';
-    const cookieHeader = pageRes.headers['set-cookie']
-      ? pageRes.headers['set-cookie'].map((c) => c.split(';')[0]).join('; ')
-      : '';
-
-    // Extract jsToken from page
+    const ndus = config.TERABOX_NDUS;
+    const cookieHeader = ndus ? `ndus=${ndus}` : '';
+    const domains = ['dm.1024terabox.com', 'www.1024terabox.com', 'www.terabox.app'];
     let jsToken = null;
-    const tokenMatch =
-      html.match(/fn%28%22([A-Za-z0-9]+)%22%29/) ||
-      html.match(/fn\([\"\']([A-Za-z0-9]+)[\"\']\)/) ||
-      html.match(/\"jsToken\"\s*:\s*\"([A-Za-z0-9]+)\"/);
+    let workingDomain = domains[0];
 
-    if (tokenMatch && tokenMatch[1]) {
-      jsToken = tokenMatch[1];
-    }
+    for (const dom of domains) {
+      try {
+        const pageRes = await axios.get(`https://${dom}/sharing/link?surl=${surl}`, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            Cookie: cookieHeader,
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+          timeout: 12000,
+        });
 
-    // Extract logid
-    let logid = pageRes.headers['logid'] || pageRes.headers['Logid'];
-    if (!logid) {
-      const logMatch = html.match(/dp-logid=([0-9]+)/) || html.match(/\"dplogid\"\s*:\s*\"?([0-9]+)\"?/);
-      if (logMatch && logMatch[1]) {
-        logid = logMatch[1];
+        const html = pageRes.data || '';
+        const tokenMatch =
+          html.match(/fn%28%22([A-Za-z0-9]+)%22%29/) ||
+          html.match(/fn\([\"']([A-Za-z0-9]+)[\"']\)/) ||
+          html.match(/\"jsToken\"\s*:\s*\"([A-Za-z0-9]+)\"/);
+
+        if (tokenMatch && tokenMatch[1]) {
+          jsToken = tokenMatch[1];
+          workingDomain = dom;
+          break;
+        }
+      } catch (err) {
+        console.warn(`[Extractor Native] Domain ${dom} check failed: ${err.message}`);
       }
     }
 
     if (!jsToken) {
-      console.warn('[Extractor Native] Could not extract jsToken from page');
+      console.warn('[Extractor Native] Could not extract jsToken from any domain');
       return null;
     }
 
-    // Request file list
-    const listUrl = 'https://www.terabox.app/share/list';
-    const params = {
-      app_id: '250528',
-      web: '1',
-      channel: 'dubox',
-      clienttype: '0',
-      jsToken: jsToken,
-      'dp-logid': logid || '',
-      page: '1',
-      num: '50',
-      by: 'name',
-      order: 'asc',
-      shorturl: surl,
-      root: '1',
-    };
-
-    const listRes = await axios.get(listUrl, {
-      params,
-      headers: {
-        'User-Agent': userAgent,
-        Referer: initialUrl,
-        Cookie: cookieHeader,
+    // Request root list
+    const listRes = await axios.get('https://www.1024terabox.com/share/list', {
+      params: {
+        app_id: '250528',
+        web: '1',
+        channel: 'dubox',
+        clienttype: '0',
+        jsToken: jsToken,
+        shorturl: surl,
+        root: '1',
+        page: '1',
+        num: '100',
+        order: 'asc',
+        by: 'name',
       },
-      timeout: 20000,
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        Cookie: cookieHeader,
+        Referer: `https://${workingDomain}/sharing/link?surl=${surl}`,
+      },
+      timeout: 15000,
     });
 
     const listData = listRes.data;
     if (!listData || listData.errno !== 0 || !Array.isArray(listData.list)) {
+      console.warn(`[Extractor Native] share/list returned errno: ${listData?.errno}`);
       return null;
     }
 
+    let rawList = listData.list;
+
+    // Expand directory if root contains a folder
+    if (rawList.length === 1 && (rawList[0].isdir === '1' || rawList[0].isdir === 1)) {
+      const folderPath = rawList[0].path;
+      console.log(`[Extractor Native] Root is directory (${folderPath}), expanding sub-files...`);
+      try {
+        const subRes = await axios.get('https://www.1024terabox.com/share/list', {
+          params: {
+            app_id: '250528',
+            web: '1',
+            channel: 'dubox',
+            clienttype: '0',
+            jsToken: jsToken,
+            shorturl: surl,
+            root: '0',
+            dir: folderPath,
+            page: '1',
+            num: '100',
+            order: 'asc',
+            by: 'name',
+          },
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            Cookie: cookieHeader,
+            Referer: `https://${workingDomain}/sharing/link?surl=${surl}`,
+          },
+          timeout: 15000,
+        });
+
+        if (subRes.data && subRes.data.errno === 0 && Array.isArray(subRes.data.list)) {
+          rawList = subRes.data.list;
+        }
+      } catch (err) {
+        console.warn(`[Extractor Native] Sub-directory expansion failed: ${err.message}`);
+      }
+    }
+
     const results = [];
-    for (const item of listData.list) {
+    for (const item of rawList) {
+      if (item.isdir === '1' || item.isdir === 1) continue; // Skip subdirectories
+
       const filename = item.server_filename || item.filename || 'TeraBox_File';
       const sizeBytes = parseInt(item.size || 0, 10);
+      const fsId = item.fs_id || '';
       const dlink = item.dlink || '';
+      const directWebLink = `https://1024terabox.com/s/1${surl}?fid=${fsId}`;
+      const effectiveLink = dlink || directWebLink;
       const thumb = (item.thumbs && (item.thumbs.url3 || item.thumbs.url2 || item.thumbs.url1)) || '';
 
       results.push({
         filename,
         size: formatBytes(sizeBytes),
         size_bytes: sizeBytes,
-        download_link: dlink,
-        direct_link: dlink,
-        stream_link: dlink,
+        download_link: effectiveLink,
+        direct_link: effectiveLink,
+        stream_link: dlink || item.docpreview || effectiveLink,
         thumbnail: thumb,
-        is_video: isVideoFile(filename),
-        is_directory: item.isdir === '1',
-        fs_id: item.fs_id || '',
+        is_video: isVideoFile(filename) || item.category === 1,
+        is_directory: false,
+        fs_id: fsId,
       });
     }
 
@@ -360,13 +398,13 @@ async function extractTeraBox(rawUrl, password = '') {
 
   console.log(`[Extractor] Resolving TeraBox link for surl: ${surl}...`);
 
-  // Try Strategy 1: Unified Cloudflare Proxy
-  let files = await extractViaProxy(surl, password);
+  // Try Strategy 1: Direct Native Authenticated Scraper (Fastest, zero proxy lag)
+  let files = await extractViaNativeWeb(surl);
 
-  // Try Strategy 2: Native Web Scraper
+  // Try Strategy 2: Unified Cloudflare Proxy
   if (!files || files.length === 0) {
-    console.log('[Extractor] Strategy 1 failed, trying Strategy 2 (Native Web Scraper)...');
-    files = await extractViaNativeWeb(surl);
+    console.log('[Extractor] Strategy 1 failed, trying Strategy 2 (Cloudflare Proxy)...');
+    files = await extractViaProxy(surl, password);
   }
 
   // Try Strategy 3: Public Gateways
@@ -384,7 +422,7 @@ async function extractTeraBox(rawUrl, password = '') {
 
   // Resolve direct redirect links for the first few files
   for (let i = 0; i < Math.min(files.length, 3); i++) {
-    if (files[i].download_link) {
+    if (files[i].download_link && files[i].download_link.includes('pcs.1024terabox.com')) {
       const resolved = await resolveDirectLink(files[i].download_link);
       if (resolved) {
         files[i].direct_link = resolved;

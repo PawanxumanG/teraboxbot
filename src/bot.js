@@ -504,15 +504,38 @@ async function handleTeraBoxLink(ctx, url) {
       `Select a file to download or stream:\n\n`;
 
     const buttons = [];
-    files.slice(0, 10).forEach((f, idx) => {
+    files.slice(0, 8).forEach((f, idx) => {
       folderMsg += `${idx + 1}. \`${f.filename}\` (${f.size})\n`;
+      const targetUrl =
+        f.direct_link ||
+        f.download_link ||
+        `https://1024terabox.com/s/1${extractResult.surl}?fid=${f.fs_id}`;
       buttons.push([
-        { text: `📥 ${f.filename.slice(0, 24)}... (${f.size})`, url: f.direct_link || f.download_link },
+        { text: `📥 ${f.filename.slice(0, 22)}... (${f.size})`, url: targetUrl },
       ]);
     });
 
-    if (files.length > 10) {
-      folderMsg += `\n_...and ${files.length - 10} more files._`;
+    if (files.length > 8) {
+      folderMsg += `\n_...and ${files.length - 8} more files in this folder._\n`;
+    }
+
+    buttons.push([
+      {
+        text: '📂 Open Complete Shared Folder',
+        url: `https://1024terabox.com/s/1${extractResult.surl}`,
+      },
+    ]);
+
+    const firstThumb = files.find((f) => f.thumbnail)?.thumbnail;
+    if (firstThumb) {
+      try {
+        await ctx.replyWithPhoto(firstThumb, {
+          caption: folderMsg,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: buttons },
+        });
+        return;
+      } catch {}
     }
 
     await ctx.reply(folderMsg, {
