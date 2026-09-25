@@ -1,0 +1,45 @@
+name: TeraBox Bot 24/7 Cloud Runner
+
+on:
+  schedule:
+    # Runs continuously: schedule keeps the runner alive in shifts
+    - cron: '0 */4 * * *'
+  workflow_dispatch: # Allows 1-click manual trigger from GitHub UI
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: terabox-bot-runner
+  cancel-in-progress: true
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run TeraBox Telegram Bot
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN || '8730987422:AAGZRo5MoD28TrCkQzRUbxkE7Wou-lkxuhA' }}
+          FIREBASE_DB_URL: ${{ secrets.FIREBASE_DB_URL || 'https://shinzoverseapk-default-rtdb.firebaseio.com' }}
+          UPI_VPA: ${{ secrets.UPI_VPA || 'pawanponnam@okicici' }}
+          UPI_NAME: ${{ secrets.UPI_NAME || 'TeraBoxBot' }}
+          ADMIN_IDS: ${{ secrets.ADMIN_IDS || '8730987422' }}
+          PORT: 3000
+        run: |
+          echo "🚀 Starting 24/7 TeraBox Telegram Bot..."
+          node index.js
