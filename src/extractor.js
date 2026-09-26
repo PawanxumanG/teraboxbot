@@ -546,13 +546,18 @@ async function extractNowPlayLink(urlStr) {
       'cashsnap.com',
     ].some((d) => host === d || host.endsWith('.' + d));
 
+    const paramId =
+      parsed.searchParams.get('linkId') ||
+      parsed.searchParams.get('link_id') ||
+      parsed.searchParams.get('id');
+
     const codeMatch = parsed.pathname.match(/\/(\d{15,})/);
-    if (!isNowPlayHost && !codeMatch) {
+    const linkId = paramId || (codeMatch ? codeMatch[1] : parsed.pathname.replace(/^\/+/, ''));
+    if (!linkId) return null;
+
+    if (!isNowPlayHost && !linkId.match(/^\d{15,}$/)) {
       return null;
     }
-
-    const linkId = codeMatch ? codeMatch[1] : parsed.pathname.replace(/^\/+/, '');
-    if (!linkId) return null;
 
     const token = '3af5cacb-8cdb-4138-8763-62b4cce7d991';
     const apis = [
@@ -560,71 +565,63 @@ async function extractNowPlayLink(urlStr) {
       'https://api.cashsnapnowhawk.com/v1/h5_open_data',
     ];
 
+    const payloadVariations = [
+      { uid: '', dir_id: '', link_id: linkId, open_link: true, page_size: 100, current_page: 1, tag: 1, h5_event: false },
+      { uid: '', dir_id: '', link_id: linkId, open_link: false, page_size: 100, current_page: 1, tag: 0, h5_event: false },
+      { uid: '', dir_id: '', link_id: linkId, open_link: false, page_size: 100, current_page: 1, tag: 1, h5_event: false },
+    ];
+
     for (const api of apis) {
-      try {
-        const res = await axios.post(
-          api,
-          {
-            uid: '',
-            dir_id: '',
-            link_id: linkId,
-            open_link: true,
-            page_size: 100,
-            current_page: 1,
-            tag: 1,
-            h5_event: false,
-          },
-          {
-            headers: {
-              iat: token,
-              'Content-Type': 'application/json',
-              'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            },
-            timeout: 10000,
+      for (const payload of payloadVariations) {
+        try {
+          const res = await axios.post(
+            api,
+            payload,
+            {
+              headers: {
+                iat: token,
+                'Content-Type': 'application/json',
+                'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+              },
+              timeout: 8000,
+            }
+          );
+
+          const data = res.data;
+          if (data && data.files && Array.isArray(data.files) && data.files.length > 0) {
+            const results = [];
+            for (const item of data.files) {
+              const meta = item.file_meta || item;
+              const filename = meta.display_name || meta.name || 'NowPlay_File';
+              const sizeBytes = parseInt(meta.size || 0, 10);
+              const dlink = meta.link || meta.download_url || meta.play_url || urlStr;
+              const thumb = meta.thumbnail || '';
+
+              results.push({
+                filename,
+                size: formatBytes(sizeBytes),
+                size_bytes: sizeBytes,
+                download_link: dlink,
+                direct_link: dlink,
+                stream_link: meta.play_url || dlink,
+                thumbnail: thumb,
+                is_video: isVideoFile(filename) || meta.type === 'VIDEO' || Boolean(meta.video),
+                is_directory: false,
+                fs_id: meta.id || item.id || linkId,
+              });
+            }
+            return { success: true, files: results };
           }
-        );
-
-        const data = res.data;
-        if (data && data.files && Array.isArray(data.files) && data.files.length > 0) {
-          const results = [];
-          for (const item of data.files) {
-            const meta = item.file_meta || item;
-            const filename = meta.display_name || meta.name || 'NowPlay_File';
-            const sizeBytes = parseInt(meta.size || 0, 10);
-            const dlink = meta.link || meta.download_url || meta.play_url || urlStr;
-            const thumb = meta.thumbnail || '';
-
-            results.push({
-              filename,
-              size: formatBytes(sizeBytes),
-              size_bytes: sizeBytes,
-              download_link: dlink,
-              direct_link: dlink,
-              stream_link: meta.play_url || dlink,
-              thumbnail: thumb,
-              is_video: isVideoFile(filename) || meta.type === 'VIDEO',
-              is_directory: false,
-              fs_id: meta.id || linkId,
-            });
-          }
-          return { success: true, files: results };
+        } catch (e) {
+          console.warn(`[NowPlay API] Error for ${api}:`, e.message);
         }
-
-        if (data && data.msg === 'NO_DATA') {
-          return {
-            success: false,
-            error: '⚠️ This shortlink has expired or the file was deleted by its uploader on NowPlay / CashSnap.',
-          };
-        }
-      } catch (e) {
-        console.warn(`[NowPlay API] Error for ${api}:`, e.message);
       }
     }
 
     return {
       success: false,
-      error: '⚠️ Unable to resolve this shortlink. The link may be inactive or expired.',
+      error: '⚠️ This shortlink has expired or the file was deleted by its uploader on NowPlay / CashSnap.',
     };
   } catch {
     return null;
