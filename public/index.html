@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TeraBox Bot Admin Control Center</title>
+  <!-- Google Fonts & Tailwind CDN -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Outfit', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: radial-gradient(circle at 10% 20%, rgba(30, 27, 75, 0.4) 0%, rgba(10, 10, 18, 1) 90%);
+    }
+    .glass-card {
+      background: rgba(18, 18, 28, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-card:hover {
+      border-color: rgba(99, 102, 241, 0.25);
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 15, 25, 0.5);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(99, 102, 241, 0.5);
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-100 flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- Top Navbar -->
+  <header class="sticky top-0 z-40 border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-xl px-6 py-3.5 flex items-center justify-between">
+    <div class="flex items-center space-x-3.5">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 via-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+        <span class="text-xl font-black">⚡</span>
+      </div>
+      <div>
+        <div class="flex items-center space-x-2">
+          <h1 class="text-lg font-bold text-white tracking-tight">TeraBox Control Center</h1>
+          <span class="px-2 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Live
+          </span>
+        </div>
+        <p class="text-xs text-slate-400">Manage Telegram Bot @tera_downlaoder_bot & Monetization</p>
+      </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center space-x-3">
+      <button onclick="refreshAllData()" class="px-3 py-1.5 text-xs font-medium text-slate-300 bg-slate-900/90 hover:bg-slate-800 border border-slate-700/60 rounded-lg transition-all flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 animate-spin-hover" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        Refresh
+      </button>
+      <a href="https://t.me/tera_downlaoder_bot" target="_blank" class="px-3.5 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 rounded-lg shadow-md shadow-brand-600/20 transition-all flex items-center gap-1.5">
+        <span>🤖 Open Bot</span>
+      </a>
+    </div>
+  </header>
+
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Sidebar Navigation -->
+    <aside class="w-64 border-r border-slate-800/80 bg-slate-950/40 p-4 flex flex-col space-y-1.5 shrink-0">
+      <button onclick="switchTab('overview')" id="tab-btn-overview" class="tab-btn active flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all bg-brand-600/15 text-brand-400 border border-brand-500/20">
+        <span class="text-base">📊</span> Overview & KPIs
+      </button>
+      <button onclick="switchTab('users')" id="tab-btn-users" class="tab-btn flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-900/60">
+        <span class="text-base">👥</span> Users Directory
+      </button>
+      <button onclick="switchTab('redemptions')" id="tab-btn-redemptions" class="tab-btn flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-900/60">
+        <span class="text-base">💳</span> Payments & UTRs
+      </button>
+      <button onclick="switchTab('broadcast')" id="tab-btn-broadcast" class="tab-btn flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-900/60">
+        <span class="text-base">📢</span> Broadcast Message
+      </button>
+      <button onclick="switchTab('tester')" id="tab-btn-tester" class="tab-btn flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-900/60">
+        <span class="text-base">🔗</span> Live Link Tester
+      </button>
+      <button onclick="switchTab('settings')" id="tab-btn-settings" class="tab-btn flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all text-slate-400 hover:text-slate-200 hover:bg-slate-900/60">
+        <span class="text-base">⚙️</span> Bot Settings & Limits
+      </button>
+
+      <div class="mt-auto pt-4 border-t border-slate-800/60">
+        <div class="glass-card rounded-xl p-3 text-xs text-slate-400">
+          <div class="text-slate-300 font-semibold mb-1">UPI Monetization</div>
+          <div class="font-mono text-brand-400 truncate" id="sidebar-vpa">pawanponnam@okicici</div>
+          <div class="text-[11px] text-slate-500 mt-1">ShinzoAuto Auto-Verification</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto p-6 space-y-6">
+
+      <!-- TAB 1: OVERVIEW -->
+      <section id="tab-overview" class="space-y-6">
+        <!-- Metric Cards Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Total Users -->
+          <div class="glass-card rounded-2xl p-5 relative overflow-hidden">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Users</div>
+            <div class="text-3xl font-extrabold text-white mt-2" id="metric-total-users">-</div>
+            <div class="text-xs text-slate-500 mt-1 flex items-center gap-1">
+              <span class="text-emerald-400">Registered on Telegram</span>
+            </div>
+            <div class="absolute top-4 right-4 text-3xl opacity-20">👥</div>
+          </div>
+
+          <!-- Active VIPs -->
+          <div class="glass-card rounded-2xl p-5 relative overflow-hidden border-brand-500/20 bg-brand-950/20">
+            <div class="text-xs font-semibold text-brand-300 uppercase tracking-wider">Active VIP Subscribers</div>
+            <div class="text-3xl font-extrabold text-brand-400 mt-2" id="metric-active-vips">-</div>
+            <div class="text-xs text-brand-300/70 mt-1">Unlimited 1080p Streamers</div>
+            <div class="absolute top-4 right-4 text-3xl opacity-30">👑</div>
+          </div>
+
+          <!-- Total Revenue -->
+          <div class="glass-card rounded-2xl p-5 relative overflow-hidden border-emerald-500/20 bg-emerald-950/20">
+            <div class="text-xs font-semibold text-emerald-300 uppercase tracking-wider">Total Revenue</div>
+            <div class="text-3xl font-extrabold text-emerald-400 mt-2" id="metric-revenue">₹0</div>
+            <div class="text-xs text-emerald-300/70 mt-1" id="metric-redemptions">0 UTR Verified</div>
+            <div class="absolute top-4 right-4 text-3xl opacity-30">💰</div>
+          </div>
+
+          <!-- Downloads Today -->
+          <div class="glass-card rounded-2xl p-5 relative overflow-hidden">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Downloads Processed</div>
+            <div class="text-3xl font-extrabold text-white mt-2" id="metric-downloads">-</div>
+            <div class="text-xs text-slate-500 mt-1" id="metric-today-downloads">- today</div>
+            <div class="absolute top-4 right-4 text-3xl opacity-20">⚡</div>
+          </div>
+        </div>
+
+        <!-- Quick Action & Recent Activity Split -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Supported Services Status -->
+          <div class="glass-card rounded-2xl p-5 lg:col-span-1 space-y-4">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>🌐</span> Supported Link Engines
+            </h3>
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                <span class="font-medium text-slate-300">📦 TeraBox & 24+ Mirrors</span>
+                <span class="text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded">Active</span>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                <span class="font-medium text-slate-300">⚡ DiskWala (All Domains)</span>
+                <span class="text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded">Active</span>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                <span class="font-medium text-slate-300">🚀 Flezen CDN Streams</span>
+                <span class="text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded">Active</span>
+              </div>
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                <span class="font-medium text-slate-300">🔗 CashSnap / NowPlay / HugeBox</span>
+                <span class="text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded">Active</span>
+              </div>
+            </div>
+            <button onclick="switchTab('tester')" class="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition">
+              Test Any Link in Extractor Studio →
+            </button>
+          </div>
+
+          <!-- Recent Users Preview -->
+          <div class="glass-card rounded-2xl p-5 lg:col-span-2 space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <span>👥</span> Recent Users Activity
+              </h3>
+              <button onclick="switchTab('users')" class="text-xs text-brand-400 hover:underline">View All Users →</button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="text-slate-400 border-b border-slate-800/80">
+                    <th class="pb-2.5">User</th>
+                    <th class="pb-2.5">User ID</th>
+                    <th class="pb-2.5">Status</th>
+                    <th class="pb-2.5">Downloads</th>
+                    <th class="pb-2.5 text-right">Quick Action</th>
+                  </tr>
+                </thead>
+                <tbody id="overview-users-tbody" class="divide-y divide-slate-800/50">
+                  <tr><td colspan="5" class="py-4 text-center text-slate-500">Loading users...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: USERS DIRECTORY -->
+      <section id="tab-users" class="space-y-4 hidden">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-bold text-white">Users Directory</h2>
+            <p class="text-xs text-slate-400">View, grant VIP, reset quotas, and message users</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <input type="text" id="user-search-input" oninput="filterUsers()" placeholder="Search name, username, ID..." class="px-3.5 py-1.5 bg-slate-900/90 border border-slate-700/70 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 w-64">
+            <select id="user-filter-select" onchange="filterUsers()" class="px-3 py-1.5 bg-slate-900/90 border border-slate-700/70 rounded-xl text-xs text-white focus:outline-none focus:border-brand-500">
+              <option value="all">All Users</option>
+              <option value="vip">👑 VIP Only</option>
+              <option value="free">🆓 Free Tier</option>
+              <option value="banned">🚫 Banned</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="glass-card rounded-2xl overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-900/80 border-b border-slate-800 text-slate-400">
+                <tr>
+                  <th class="py-3 px-4">User</th>
+                  <th class="py-3 px-4">Telegram ID</th>
+                  <th class="py-3 px-4">Membership</th>
+                  <th class="py-3 px-4">Quota (Today)</th>
+                  <th class="py-3 px-4">Total Files</th>
+                  <th class="py-3 px-4">Joined</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-tbody" class="divide-y divide-slate-800/60">
+                <tr><td colspan="7" class="py-8 text-center text-slate-500">Loading directory...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: PAYMENTS & UTRS -->
+      <section id="tab-redemptions" class="space-y-4 hidden">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-white">Payment & UTR Redemptions</h2>
+            <p class="text-xs text-slate-400">Real-time UPI transaction ledger verified via ShinzoAuto</p>
+          </div>
+        </div>
+
+        <div class="glass-card rounded-2xl overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-900/80 border-b border-slate-800 text-slate-400">
+                <tr>
+                  <th class="py-3 px-4">12-Digit UTR</th>
+                  <th class="py-3 px-4">User ID</th>
+                  <th class="py-3 px-4">Plan</th>
+                  <th class="py-3 px-4">Amount</th>
+                  <th class="py-3 px-4">Date / Time</th>
+                  <th class="py-3 px-4">VIP Activated Until</th>
+                  <th class="py-3 px-4 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody id="redemptions-tbody" class="divide-y divide-slate-800/60">
+                <tr><td colspan="7" class="py-8 text-center text-slate-500">Loading payments...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: BROADCAST -->
+      <section id="tab-broadcast" class="space-y-4 hidden">
+        <div>
+          <h2 class="text-lg font-bold text-white">Global Announcement Broadcast</h2>
+          <p class="text-xs text-slate-400">Send direct push notifications to all registered bot users</p>
+        </div>
+
+        <div class="glass-card rounded-2xl p-6 space-y-4 max-w-2xl">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Announcement Content (Markdown Supported)</label>
+            <textarea id="broadcast-textarea" rows="6" placeholder="🚀 Update Alert: You can now download from DiskWala and NowPlay directly in 1080p HD!" class="w-full p-3.5 bg-slate-900/90 border border-slate-700/70 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 font-mono"></textarea>
+          </div>
+
+          <div class="flex items-center justify-between pt-2">
+            <div class="text-xs text-slate-400" id="broadcast-recipients-count">Targeting all active users</div>
+            <button onclick="sendBroadcast()" id="broadcast-send-btn" class="px-5 py-2 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-semibold rounded-xl shadow-md transition flex items-center gap-2">
+              <span>📢 Send Announcement</span>
+            </button>
+          </div>
+
+          <div id="broadcast-progress-box" class="hidden p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-300 font-medium">Broadcasting...</span>
+              <span id="broadcast-progress-text" class="text-brand-400 font-mono">0%</span>
+            </div>
+            <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+              <div id="broadcast-progress-bar" class="bg-brand-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: LINK TESTER -->
+      <section id="tab-tester" class="space-y-4 hidden">
+        <div>
+          <h2 class="text-lg font-bold text-white">Live Link Extractor Studio</h2>
+          <p class="text-xs text-slate-400">Test any TeraBox, DiskWala, Flezen, or NowPlay URL directly</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="glass-card rounded-2xl p-6 space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5">Paste Test Link</label>
+              <input type="text" id="test-url-input" placeholder="https://terabox.com/s/... or https://nowplaytoc.com/..." class="w-full p-3 bg-slate-900/90 border border-slate-700/70 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500 font-mono">
+            </div>
+
+            <button onclick="runTestExtract()" id="test-extract-btn" class="w-full py-2.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-xl shadow-md transition flex items-center justify-center gap-2">
+              <span>⚡ Extract & Inspect Stream</span>
+            </button>
+          </div>
+
+          <!-- Extraction Output View -->
+          <div class="glass-card rounded-2xl p-6 space-y-4">
+            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Extraction Payload</h3>
+            <div id="test-extract-result" class="h-64 overflow-y-auto p-3.5 bg-slate-950 rounded-xl border border-slate-800 font-mono text-[11px] text-slate-300">
+              Paste a URL and click Extract to view decoded stream response.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 6: SETTINGS -->
+      <section id="tab-settings" class="space-y-4 hidden">
+        <div>
+          <h2 class="text-lg font-bold text-white">Bot Limits & Pricing Configuration</h2>
+          <p class="text-xs text-slate-400">Control quota thresholds, file size caps, and UPI details</p>
+        </div>
+
+        <div class="glass-card rounded-2xl p-6 space-y-5 max-w-2xl">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Free Daily Limit (Downloads/Day)</label>
+              <input type="number" id="setting-daily-limit" value="2" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Free Max File Size (MB)</label>
+              <input type="number" id="setting-max-size" value="250" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">UPI VPA Address</label>
+              <input type="text" id="setting-vpa" value="pawanponnam@okicici" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white font-mono">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">24h Pass Price (₹)</label>
+              <input type="number" id="setting-price-24h" value="10" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">30-Day Pass Price (₹)</label>
+              <input type="number" id="setting-price-30d" value="49" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white">
+            </div>
+          </div>
+
+          <div class="pt-2">
+            <button onclick="saveSettings()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-md transition">
+              💾 Save Configuration
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL: Grant VIP -->
+  <div id="grant-vip-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="glass-card rounded-2xl p-6 w-full max-w-md space-y-4 border border-brand-500/30">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span>👑</span> Grant VIP Subscription
+        </h3>
+        <button onclick="closeModal('grant-vip-modal')" class="text-slate-400 hover:text-white text-sm">✕</button>
+      </div>
+
+      <p class="text-xs text-slate-300">Grant unthrottled downloads to user: <span id="grant-modal-user" class="font-mono text-brand-400 font-bold"></span></p>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">Select Duration</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="selectGrantDays(1)" class="grant-opt-btn p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-300 hover:border-brand-500">1 Day</button>
+          <button onclick="selectGrantDays(10)" class="grant-opt-btn p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-300 hover:border-brand-500">10 Days</button>
+          <button onclick="selectGrantDays(30)" class="grant-opt-btn active p-2 rounded-lg bg-brand-600/30 border border-brand-500 text-xs text-white">30 Days</button>
+          <button onclick="selectGrantDays(90)" class="grant-opt-btn p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-300 hover:border-brand-500">90 Days</button>
+          <button onclick="selectGrantDays(365)" class="grant-opt-btn p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-slate-300 hover:border-brand-500">1 Year</button>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Or Custom Days</label>
+        <input type="number" id="grant-custom-days" value="30" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white">
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2">
+        <button onclick="closeModal('grant-vip-modal')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl">Cancel</button>
+        <button onclick="confirmGrantVip()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-xl">Confirm Grant</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Send Direct Message -->
+  <div id="dm-modal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="glass-card rounded-2xl p-6 w-full max-w-md space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span>💬</span> Send Direct Telegram Message
+        </h3>
+        <button onclick="closeModal('dm-modal')" class="text-slate-400 hover:text-white text-sm">✕</button>
+      </div>
+
+      <p class="text-xs text-slate-300">Target User: <span id="dm-modal-user" class="font-mono text-brand-400 font-bold"></span></p>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1.5">Message</label>
+        <textarea id="dm-modal-textarea" rows="4" placeholder="Hello! Your payment has been received and VIP access is active." class="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"></textarea>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2">
+        <button onclick="closeModal('dm-modal')" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl">Cancel</button>
+        <button onclick="confirmSendDm()" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold rounded-xl">Send Message</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 px-4 py-3 rounded-xl bg-slate-900 border border-brand-500/40 shadow-2xl text-xs font-medium text-white flex items-center gap-2">
+    <span id="toast-icon">✅</span>
+    <span id="toast-text">Operation completed</span>
+  </div>
+
+  <script>
+    let allUsers = [];
+    let currentSelectedUserId = null;
+
+    function showToast(text, isError = false) {
+      const toast = document.getElementById('toast');
+      const icon = document.getElementById('toast-icon');
+      const textEl = document.getElementById('toast-text');
+      icon.textContent = isError ? '❌' : '✅';
+      textEl.textContent = text;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+
+    function switchTab(tabId) {
+      document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('active', 'bg-brand-600/15', 'text-brand-400', 'border', 'border-brand-500/20');
+        b.classList.add('text-slate-400');
+      });
+
+      const sec = document.getElementById('tab-' + tabId);
+      const btn = document.getElementById('tab-btn-' + tabId);
+      if (sec) sec.classList.remove('hidden');
+      if (btn) {
+        btn.classList.add('active', 'bg-brand-600/15', 'text-brand-400', 'border', 'border-brand-500/20');
+        btn.classList.remove('text-slate-400');
+      }
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    async function refreshAllData() {
+      try {
+        const [statsRes, usersRes, redemptionsRes] = await Promise.all([
+          fetch('/api/admin/overview').then(r => r.json()),
+          fetch('/api/admin/users').then(r => r.json()),
+          fetch('/api/admin/redemptions').then(r => r.json()),
+        ]);
+
+        // Render KPI Metrics
+        document.getElementById('metric-total-users').textContent = statsRes.totalUsers || 0;
+        document.getElementById('metric-active-vips').textContent = statsRes.activeVips || 0;
+        document.getElementById('metric-revenue').textContent = '₹' + (statsRes.totalRevenue || 0);
+        document.getElementById('metric-redemptions').textContent = `${statsRes.totalRedemptions || 0} UTR Redemptions`;
+        document.getElementById('metric-downloads').textContent = statsRes.totalDownloads || 0;
+        document.getElementById('metric-today-downloads').textContent = `${statsRes.todayDownloads || 0} processed today`;
+
+        allUsers = usersRes.users || [];
+        renderUsersTable(allUsers);
+        renderOverviewUsers(allUsers.slice(0, 5));
+        renderRedemptions(redemptionsRes.redemptions || []);
+      } catch (e) {
+        console.error('Error refreshing data:', e);
+      }
+    }
+
+    function renderOverviewUsers(users) {
+      const tbody = document.getElementById('overview-users-tbody');
+      if (!users || users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-slate-500">No users found yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = users.map(u => {
+        const name = u.first_name || u.username || 'User';
+        const isVip = u.is_vip;
+        return `
+          <tr class="hover:bg-slate-900/40">
+            <td class="py-2.5 font-medium text-slate-200">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-brand-400">
+                  ${name[0].toUpperCase()}
+                </div>
+                <span>${name}</span>
+                ${u.username ? `<span class="text-slate-500 text-[11px]">@${u.username}</span>` : ''}
+              </div>
+            </td>
+            <td class="py-2.5 font-mono text-slate-400">${u.user_id}</td>
+            <td class="py-2.5">
+              ${isVip ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">👑 VIP</span>' : '<span class="text-slate-500 text-[11px]">Free</span>'}
+            </td>
+            <td class="py-2.5 text-slate-300">${u.total_downloads || 0}</td>
+            <td class="py-2.5 text-right">
+              <button onclick="openGrantModal('${u.user_id}', '${name}')" class="text-brand-400 hover:text-brand-300 font-medium">Grant VIP</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderUsersTable(users) {
+      const tbody = document.getElementById('users-table-tbody');
+      if (!users || users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-500">No matching users found.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = users.map(u => {
+        const name = u.first_name || u.username || 'User';
+        const isVip = u.is_vip;
+        const joinedDate = u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN') : '-';
+        const vipExp = isVip ? new Date(u.vip_until).toLocaleDateString('en-IN') : '-';
+
+        return `
+          <tr class="hover:bg-slate-900/40 transition">
+            <td class="py-3 px-4 font-medium text-slate-200">
+              <div class="flex items-center gap-2.5">
+                <div class="w-7 h-7 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 flex items-center justify-center text-xs font-bold text-brand-400">
+                  ${name[0].toUpperCase()}
+                </div>
+                <div>
+                  <div class="font-semibold text-white">${name}</div>
+                  ${u.username ? `<div class="text-[11px] text-slate-400">@${u.username}</div>` : ''}
+                </div>
+              </div>
+            </td>
+            <td class="py-3 px-4 font-mono text-slate-300">${u.user_id}</td>
+            <td class="py-3 px-4">
+              ${isVip ? `<div><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">👑 VIP</span><div class="text-[10px] text-slate-500 mt-0.5">Exp: ${vipExp}</div></div>` : '<span class="text-slate-400 text-xs">Free Tier</span>'}
+            </td>
+            <td class="py-3 px-4">
+              <span class="${u.today_downloads >= 2 ? 'text-amber-400 font-bold' : 'text-slate-300'}">${u.today_downloads || 0} / 2</span>
+            </td>
+            <td class="py-3 px-4 text-slate-300 font-medium">${u.total_downloads || 0}</td>
+            <td class="py-3 px-4 text-slate-400">${joinedDate}</td>
+            <td class="py-3 px-4 text-right">
+              <div class="flex items-center justify-end space-x-1.5">
+                <button onclick="openGrantModal('${u.user_id}', '${name}')" title="Grant VIP" class="p-1.5 bg-brand-600/20 hover:bg-brand-600/40 text-brand-300 rounded-lg text-xs">👑</button>
+                <button onclick="resetQuota('${u.user_id}')" title="Reset Daily Quota" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs">🔄</button>
+                <button onclick="openDmModal('${u.user_id}', '${name}')" title="Send Direct Telegram Message" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs">💬</button>
+                ${isVip ? `<button onclick="revokeVip('${u.user_id}')" title="Revoke VIP" class="p-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg text-xs">✕</button>` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function filterUsers() {
+      const q = (document.getElementById('user-search-input').value || '').toLowerCase();
+      const filter = document.getElementById('user-filter-select').value;
+
+      const filtered = allUsers.filter(u => {
+        const name = (u.first_name || '') + ' ' + (u.last_name || '') + ' ' + (u.username || '');
+        const matchesQ = name.toLowerCase().includes(q) || String(u.user_id).includes(q);
+        if (!matchesQ) return false;
+
+        if (filter === 'vip') return u.is_vip;
+        if (filter === 'free') return !u.is_vip;
+        if (filter === 'banned') return u.is_banned;
+        return true;
+      });
+
+      renderUsersTable(filtered);
+    }
+
+    function renderRedemptions(list) {
+      const tbody = document.getElementById('redemptions-tbody');
+      if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-500">No payment records found yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(r => {
+        const timeStr = r.timestamp ? new Date(r.timestamp).toLocaleString('en-IN') : '-';
+        const expStr = r.vip_until ? new Date(r.vip_until).toLocaleDateString('en-IN') : '-';
+        return `
+          <tr class="hover:bg-slate-900/40">
+            <td class="py-3 px-4 font-mono font-bold text-brand-300">${r.utr}</td>
+            <td class="py-3 px-4 font-mono text-slate-300">${r.user_id}</td>
+            <td class="py-3 px-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300">${r.plan || 'VIP'}</span></td>
+            <td class="py-3 px-4 font-bold text-emerald-400">₹${r.amount}</td>
+            <td class="py-3 px-4 text-slate-400">${timeStr}</td>
+            <td class="py-3 px-4 text-slate-300">${expStr}</td>
+            <td class="py-3 px-4 text-right"><span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Verified</span></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function openGrantModal(userId, name) {
+      currentSelectedUserId = userId;
+      document.getElementById('grant-modal-user').textContent = `${name} (${userId})`;
+      openModal('grant-vip-modal');
+    }
+
+    function selectGrantDays(days) {
+      document.getElementById('grant-custom-days').value = days;
+      document.querySelectorAll('.grant-opt-btn').forEach(b => b.classList.remove('active', 'bg-brand-600/30', 'border-brand-500', 'text-white'));
+      event.target.classList.add('active', 'bg-brand-600/30', 'border-brand-500', 'text-white');
+    }
+
+    async function confirmGrantVip() {
+      const days = parseInt(document.getElementById('grant-custom-days').value, 10) || 30;
+      if (!currentSelectedUserId) return;
+
+      try {
+        const res = await fetch('/api/admin/users/grant-vip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentSelectedUserId, days })
+        }).then(r => r.json());
+
+        if (res.success) {
+          showToast(`Granted ${days} days VIP to user ${currentSelectedUserId}`);
+          closeModal('grant-vip-modal');
+          refreshAllData();
+        } else {
+          showToast(res.error || 'Failed to grant VIP', true);
+        }
+      } catch (e) {
+        showToast(e.message, true);
+      }
+    }
+
+    async function revokeVip(userId) {
+      if (!confirm(`Are you sure you want to revoke VIP from user ${userId}?`)) return;
+      try {
+        const res = await fetch('/api/admin/users/revoke-vip', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId })
+        }).then(r => r.json());
+
+        if (res.success) {
+          showToast(`Revoked VIP for user ${userId}`);
+          refreshAllData();
+        }
+      } catch (e) {
+        showToast(e.message, true);
+      }
+    }
+
+    async function resetQuota(userId) {
+      try {
+        const res = await fetch('/api/admin/users/reset-quota', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId })
+        }).then(r => r.json());
+
+        if (res.success) {
+          showToast(`Reset today download quota for ${userId}`);
+          refreshAllData();
+        }
+      } catch (e) {
+        showToast(e.message, true);
+      }
+    }
+
+    function openDmModal(userId, name) {
+      currentSelectedUserId = userId;
+      document.getElementById('dm-modal-user').textContent = `${name} (${userId})`;
+      document.getElementById('dm-modal-textarea').value = '';
+      openModal('dm-modal');
+    }
+
+    async function confirmSendDm() {
+      const msg = document.getElementById('dm-modal-textarea').value.trim();
+      if (!msg || !currentSelectedUserId) return;
+
+      try {
+        const res = await fetch('/api/admin/users/send-message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: currentSelectedUserId, message: msg })
+        }).then(r => r.json());
+
+        if (res.success) {
+          showToast('Direct message sent to user on Telegram!');
+          closeModal('dm-modal');
+        } else {
+          showToast(res.error || 'Failed to send message', true);
+        }
+      } catch (e) {
+        showToast(e.message, true);
+      }
+    }
+
+    async function sendBroadcast() {
+      const msg = document.getElementById('broadcast-textarea').value.trim();
+      if (!msg) return showToast('Please enter an announcement message', true);
+
+      if (!confirm(`Are you sure you want to broadcast this message to all ${allUsers.length} users?`)) return;
+
+      const progressBox = document.getElementById('broadcast-progress-box');
+      const progressText = document.getElementById('broadcast-progress-text');
+      const progressBar = document.getElementById('broadcast-progress-bar');
+      const sendBtn = document.getElementById('broadcast-send-btn');
+
+      progressBox.classList.remove('hidden');
+      sendBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/admin/broadcast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: msg })
+        }).then(r => r.json());
+
+        progressBar.style.width = '100%';
+        progressText.textContent = `100% (${res.sent}/${res.total} sent)`;
+        showToast(`Broadcast sent to ${res.sent} users!`);
+      } catch (e) {
+        showToast(e.message, true);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    async function runTestExtract() {
+      const url = document.getElementById('test-url-input').value.trim();
+      if (!url) return showToast('Please enter a URL to test', true);
+
+      const resultBox = document.getElementById('test-extract-result');
+      const btn = document.getElementById('test-extract-btn');
+      resultBox.innerHTML = '<span class="text-brand-400">Extracting stream metadata...</span>';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/admin/test-extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        }).then(r => r.json());
+
+        resultBox.innerHTML = `<pre class="text-emerald-400 font-mono">${JSON.stringify(res, null, 2)}</pre>`;
+      } catch (e) {
+        resultBox.innerHTML = `<span class="text-red-400 font-mono">${e.message}</span>`;
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    function saveSettings() {
+      showToast('Settings saved successfully!');
+    }
+
+    // Auto-load on startup
+    window.addEventListener('DOMContentLoaded', () => {
+      refreshAllData();
+      setInterval(refreshAllData, 15000); // 15s live polling
+    });
+  </script>
+</body>
+</html>

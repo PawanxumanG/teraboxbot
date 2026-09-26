@@ -20,6 +20,7 @@ async function main() {
   const app = createServer(bot);
   const server = app.listen(config.PORT, () => {
     console.log(`🌐 Web server & health monitor listening on port ${config.PORT}`);
+    console.log(`🖥️  Admin Dashboard URL: http://localhost:${config.PORT}/admin`);
     console.log(`📡 Health Check URL: http://localhost:${config.PORT}/health`);
   });
 

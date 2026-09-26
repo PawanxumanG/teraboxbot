@@ -318,16 +318,129 @@ async function manualRevokeVip(userId) {
 }
 
 /**
+ * Fetch all users with full metadata
+ */
+async function getAllUsers() {
+  try {
+    const res = await axios.get(`${DB_URL}/terabox_users.json`);
+    const data = res.data || {};
+    const now = Date.now();
+    const today = getTodayDateString();
+
+    const users = Object.keys(data).map((userId) => {
+      const u = data[userId];
+      const isVip = Boolean(u.vip_until && u.vip_until > now);
+      const daily = u.daily_downloads || { date: today, count: 0 };
+      const todayCount = daily.date === today ? (daily.count || 0) : 0;
+
+      return {
+        user_id: userId,
+        username: u.username || '',
+        first_name: u.first_name || '',
+        last_name: u.last_name || '',
+        created_at: u.created_at || 0,
+        vip_until: u.vip_until || 0,
+        is_vip: isVip,
+        is_banned: Boolean(u.is_banned),
+        total_downloads: u.total_downloads || 0,
+        today_downloads: todayCount,
+        last_download: u.last_download || null,
+      };
+    });
+
+    // Sort by most recent activity / creation
+    return users.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+  } catch (error) {
+    console.error('[DB] Error fetching all users:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Reset a user's daily download quota
+ * @param {string|number} userId 
+ */
+async function resetUserQuota(userId) {
+  try {
+    const today = getTodayDateString();
+    await axios.patch(`${DB_URL}/terabox_users/${userId}.json`, {
+      daily_downloads: {
+        date: today,
+        count: 0,
+      },
+    });
+    return { success: true };
+  } catch (error) {
+    console.error(`[DB] Error resetting quota for ${userId}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Toggle ban state for a user
+ * @param {string|number} userId 
+ * @param {boolean} isBanned 
+ */
+async function toggleUserBan(userId, isBanned) {
+  try {
+    await axios.patch(`${DB_URL}/terabox_users/${userId}.json`, {
+      is_banned: Boolean(isBanned),
+      banned_at: isBanned ? Date.now() : 0,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error(`[DB] Error toggling ban for ${userId}:`, error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Fetch all redemptions & transactions
+ */
+async function getAllRedemptions() {
+  try {
+    const res = await axios.get(`${DB_URL}/terabox_redemptions.json`);
+    const data = res.data || {};
+    const list = Object.keys(data).map((key) => ({
+      id: key,
+      ...data[key],
+    }));
+    return list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  } catch (error) {
+    console.error('[DB] Error fetching redemptions:', error.message);
+    return [];
+  }
+}
+
+/**
  * Fetch Admin Statistics
  */
 async function getAdminStats() {
   try {
     const [usersRes, redemptionsRes] = await Promise.all([
-      axios.get(`${DB_URL}/terabox_users.json?shallow=true`).catch(() => ({ data: {} })),
+      axios.get(`${DB_URL}/terabox_users.json`).catch(() => ({ data: {} })),
       axios.get(`${DB_URL}/terabox_redemptions.json`).catch(() => ({ data: {} })),
     ]);
 
-    const totalUsers = Object.keys(usersRes.data || {}).length;
+    const usersData = usersRes.data || {};
+    const totalUsers = Object.keys(usersData).length;
+    const now = Date.now();
+    const today = getTodayDateString();
+
+    let activeVips = 0;
+    let totalDownloads = 0;
+    let todayDownloads = 0;
+
+    for (const u of Object.values(usersData)) {
+      if (u) {
+        if (u.vip_until && u.vip_until > now) activeVips++;
+        totalDownloads += u.total_downloads || 0;
+        if (u.daily_downloads && u.daily_downloads.date === today) {
+          todayDownloads += u.daily_downloads.count || 0;
+        }
+      }
+    }
+
     const redemptions = redemptionsRes.data || {};
     let totalRevenue = 0;
     let totalRedemptions = 0;
@@ -342,12 +455,22 @@ async function getAdminStats() {
 
     return {
       totalUsers,
+      activeVips,
+      totalDownloads,
+      todayDownloads,
       totalRedemptions,
       totalRevenue,
     };
   } catch (error) {
     console.error('[DB] Error getting admin stats:', error.message);
-    return { totalUsers: 0, totalRedemptions: 0, totalRevenue: 0 };
+    return {
+      totalUsers: 0,
+      activeVips: 0,
+      totalDownloads: 0,
+      todayDownloads: 0,
+      totalRedemptions: 0,
+      totalRevenue: 0,
+    };
   }
 }
 
@@ -372,6 +495,10 @@ module.exports = {
   verifyAndRedeemUtr,
   manualGrantVip,
   manualRevokeVip,
+  getAllUsers,
+  resetUserQuota,
+  toggleUserBan,
+  getAllRedemptions,
   getAdminStats,
   getAllUserIds,
 };
