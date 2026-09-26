@@ -45,6 +45,11 @@ async function downloadToFile(url, filename, totalBytes = 0, onProgress = null) 
     },
   });
 
+  const contentType = (response.headers['content-type'] || '').toLowerCase();
+  if (contentType.includes('text/html') || contentType.includes('application/json')) {
+    throw new Error('Destination is a web redirect instead of direct binary media');
+  }
+
   const streamTotal = parseInt(response.headers['content-length'] || totalBytes || 0, 10);
   let downloadedBytes = 0;
   let lastProgressUpdate = 0;
