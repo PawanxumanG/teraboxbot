@@ -5,8 +5,9 @@ const extractor = require('./extractor');
 const payment = require('./payment');
 const downloader = require('./downloader');
 
-// In-memory state for user pending actions (e.g. awaiting UTR, pending links)
+// In-memory state for user sessions and folder shares
 const userSessions = new Map();
+const folderCache = new Map();
 
 function getSession(userId) {
   if (!userSessions.has(userId)) {
@@ -245,6 +246,49 @@ function createBot() {
     const planId = ctx.match[1];
     if (config.PLANS[planId]) {
       await handlePlanSelected(ctx, planId);
+    }
+  });
+
+  // In-chat file downloader for folder shares
+  bot.action(/^dl_f_([a-zA-Z0-9]+)_(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery('⚡ Starting direct download...');
+    const shareId = ctx.match[1];
+    const fileIdx = parseInt(ctx.match[2], 10);
+    const files = folderCache.get(shareId);
+
+    if (!files || !files[fileIdx]) {
+      return ctx.reply('⚠️ Session expired for this folder. Please re-send the link to download.');
+    }
+
+    const file = files[fileIdx];
+    const quota = await database.checkUserQuota(ctx.from.id);
+    await database.recordDownload(ctx.from.id, file);
+    await downloader.deliverFile(ctx, file, quota);
+  });
+
+  // Upload all files from folder to Telegram chat
+  bot.action(/^dl_all_([a-zA-Z0-9]+)$/, async (ctx) => {
+    await ctx.answerCbQuery('🚀 Starting batch upload...');
+    const shareId = ctx.match[1];
+    const files = folderCache.get(shareId);
+
+    if (!files || files.length === 0) {
+      return ctx.reply('⚠️ Session expired for this folder. Please re-send the link.');
+    }
+
+    const quota = await database.checkUserQuota(ctx.from.id);
+    await ctx.reply(`🚀 *Queued ${files.length} files for direct Telegram upload!* Sending them one by one...`, {
+      parse_mode: 'Markdown',
+    });
+
+    for (let i = 0; i < files.length; i++) {
+      try {
+        await database.recordDownload(ctx.from.id, files[i]);
+        await downloader.deliverFile(ctx, files[i], quota);
+        await new Promise((r) => setTimeout(r, 1000));
+      } catch (err) {
+        console.error(`[Downloader] Batch upload error for item ${i}:`, err.message);
+      }
     }
   });
 
@@ -537,30 +581,32 @@ async function handleTeraBoxLink(ctx, url) {
     await downloader.deliverFile(ctx, files[0], quota);
   } else {
     // Multi-file folder share
+    const shareId = Math.random().toString(36).substring(2, 8);
+    folderCache.set(shareId, files);
+
     let folderMsg =
       `📁 *Folder Share Found (${files.length} Files)*\n\n` +
-      `Select a file to download or stream:\n\n`;
+      `Click any file below to download/stream it directly in this chat, or tap *Upload All*:\n\n`;
 
     const buttons = [];
-    files.slice(0, 8).forEach((f, idx) => {
+    files.slice(0, 10).forEach((f, idx) => {
       folderMsg += `${idx + 1}. \`${f.filename}\` (${f.size})\n`;
-      const targetUrl =
-        f.direct_link ||
-        f.download_link ||
-        `https://1024terabox.com/s/1${extractResult.surl}?fid=${f.fs_id}`;
       buttons.push([
-        { text: `📥 ${f.filename.slice(0, 22)}... (${f.size})`, url: targetUrl },
+        {
+          text: `📥 ${idx + 1}. ${f.filename.slice(0, 26)} (${f.size})`,
+          callback_data: `dl_f_${shareId}_${idx}`,
+        },
       ]);
     });
 
-    if (files.length > 8) {
-      folderMsg += `\n_...and ${files.length - 8} more files in this folder._\n`;
+    if (files.length > 10) {
+      folderMsg += `\n_...and ${files.length - 10} more files in this folder._\n`;
     }
 
     buttons.push([
       {
-        text: '📂 Open Complete Shared Folder',
-        url: `https://1024terabox.com/s/1${extractResult.surl}`,
+        text: '🚀 Upload All Files to Telegram',
+        callback_data: `dl_all_${shareId}`,
       },
     ]);
 

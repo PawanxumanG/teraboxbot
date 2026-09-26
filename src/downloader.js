@@ -120,26 +120,16 @@ async function deliverFile(ctx, file, quota) {
     );
   }
 
-  const isDirectBinaryStream = Boolean(
-    dlink &&
-    (
-      dlink.includes('pcs.1024terabox.com') ||
-      dlink.includes('data.1024terabox.com') ||
-      dlink.includes('.baidupcs.com') ||
-      dlink.includes('workers.dev') ||
-      dlink.includes('/file/')
-    ) &&
-    !dlink.includes('/sharing/link') &&
-    !dlink.includes('?fid=')
-  );
+  const maxUploadBytes = quota.isVip
+    ? Math.min(config.TELEGRAM_MAX_DIRECT_UPLOAD_BYTES, 2047 * 1024 * 1024)
+    : config.TELEGRAM_MAX_DIRECT_UPLOAD_BYTES;
 
-  // Check if file is small enough for direct Telegram upload and has a raw binary stream
-  const canDirectUpload = sizeBytes > 0 && sizeBytes <= config.TELEGRAM_MAX_DIRECT_UPLOAD_BYTES && isDirectBinaryStream;
+  const canDirectUpload = (sizeBytes === 0 || sizeBytes <= maxUploadBytes) && Boolean(dlink && dlink.startsWith('http'));
 
   if (canDirectUpload) {
     // Direct chunked download + Telegram upload
     const statusMsg = await ctx.reply(
-      `📥 *Preparing Download...*\n\n` +
+      `📥 *Preparing ${isVideo ? 'Video' : 'File'}...*\n\n` +
       `📁 *File:* \`${filename}\`\n` +
       `📦 *Size:* ${sizeFormatted}\n` +
       `⚡ *Speed:* High-Speed Direct Stream\n\n` +
@@ -156,9 +146,9 @@ async function deliverFile(ctx, file, quota) {
             ctx.chat.id,
             statusMsg.message_id,
             null,
-            `📥 *Downloading from TeraBox...*\n\n` +
+            `📥 *Downloading ${isVideo ? 'Video' : 'File'}...*\n\n` +
             `📁 *File:* \`${filename}\`\n` +
-            `📦 *Size:* ${formatBytes(curr)} / ${formatBytes(total)}\n` +
+            `📦 *Size:* ${formatBytes(curr)} / ${formatBytes(total || sizeBytes)}\n` +
             `[${bar}] ${percent}%`,
             { parse_mode: 'Markdown' }
           );
@@ -173,13 +163,13 @@ async function deliverFile(ctx, file, quota) {
           ctx.chat.id,
           statusMsg.message_id,
           null,
-          `📤 *Uploading to Telegram...*\n\n📁 \`${filename}\`\nAlmost done!`,
+          `📤 *Uploading to Telegram Chat...*\n\n📁 \`${filename}\`\nAlmost done!`,
           { parse_mode: 'Markdown' }
         );
       } catch {}
 
       const caption =
-        `✅ *TeraBox Download Complete!*\n\n` +
+        `✅ *Download Complete!*\n\n` +
         `📁 *File:* \`${filename}\`\n` +
         `📦 *Size:* ${sizeFormatted}\n` +
         `⚡ *Powered by:* @${ctx.botInfo?.username || 'tera_downlaoder_bot'}`;
@@ -208,10 +198,10 @@ async function deliverFile(ctx, file, quota) {
       console.error('[Downloader] Direct upload error:', err.message);
       // Fallback to providing high-speed direct download link
       const fallbackCaption =
-        `⚡ *Direct Download Ready!*\n\n` +
+        `⚡ *Direct Download & Stream Ready!*\n\n` +
         `📁 *File:* \`${filename}\`\n` +
         `📦 *Size:* ${sizeFormatted}\n\n` +
-        `Click below to download or stream the file directly without speed limits!`;
+        `Click below to download or stream directly at full speed:`;
 
       const fallbackKeyboard = [
         [{ text: '⚡ Instant Direct Download', url: dlink }],
