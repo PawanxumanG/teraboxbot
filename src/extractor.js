@@ -2,7 +2,7 @@ const axios = require('axios');
 const { URL } = require('url');
 const config = require('./config');
 
-// Recognized TeraBox and redirector domains
+// Recognized TeraBox and mirror domains
 const TERABOX_DOMAINS = [
   'terabox.com',
   'www.terabox.com',
@@ -48,6 +48,43 @@ const TERABOX_DOMAINS = [
   'www.dubox.com',
   'terabox.me',
   'www.terabox.me',
+  'terabox.app',
+  'www.terabox.app',
+  'box.guide',
+  'www.box.guide',
+];
+
+// DiskWala domains
+const DISKWALA_DOMAINS = [
+  'diskwala.com',
+  'www.diskwala.com',
+  'disk.diskwala.com',
+  'diskwala.in',
+  'www.diskwala.in',
+  'diskwala.tech',
+  'diskwala.online',
+  'diskwala.link',
+  'disk.media',
+];
+
+// Flezen domains
+const FLEZEN_DOMAINS = [
+  'flezen.com',
+  'www.flezen.com',
+  'flezen.org',
+  'www.flezen.org',
+  'flezen.cc',
+  'www.flezen.cc',
+  'flezen.xyz',
+  'www.flezen.xyz',
+  'flezen.in',
+  'www.flezen.in',
+  'flezen.app',
+  'flezen.link',
+];
+
+// Supported Affiliates & Shortlink Gateways
+const SHORTENER_DOMAINS = [
   'nowplaytoc.com',
   'www.nowplaytoc.com',
   'nowplaylee.com',
@@ -56,6 +93,12 @@ const TERABOX_DOMAINS = [
   'www.nowplaygo.com',
   'hugeboxlightning.com',
   'hugeboxstack.com',
+  'cashsnap.com',
+  'cashsnap.in',
+  'yt1s.click',
+  'terashare.in',
+  'tinyurl.com',
+  'bit.ly',
 ];
 
 const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.wmv', '.m4v', '.ts', '.3gp'];
@@ -81,15 +124,19 @@ function extractUrlsFromText(text) {
 }
 
 /**
- * Check if a URL matches any TeraBox or known redirector domain
+ * Check if a URL matches any supported domain
  */
 function isValidTeraBoxUrl(urlString) {
   try {
     const parsed = new URL(urlString.trim());
     const host = parsed.hostname.toLowerCase();
-    const isDomainMatch = TERABOX_DOMAINS.some(
-      (d) => host === d || host.endsWith('.' + d)
-    );
+    const allDomains = [
+      ...TERABOX_DOMAINS,
+      ...DISKWALA_DOMAINS,
+      ...FLEZEN_DOMAINS,
+      ...SHORTENER_DOMAINS,
+    ];
+    const isDomainMatch = allDomains.some((d) => host === d || host.endsWith('.' + d));
     if (isDomainMatch) return true;
     return parsed.pathname.includes('/s/') || parsed.search.includes('surl=') || parsed.search.includes('shorturl=');
   } catch {
@@ -585,6 +632,157 @@ async function extractNowPlayLink(urlStr) {
 }
 
 /**
+ * DiskWala Link Extractor
+ */
+async function extractDiskWalaLink(urlStr) {
+  try {
+    const parsed = new URL(urlStr.trim());
+    const host = parsed.hostname.toLowerCase();
+    const isDiskWala = DISKWALA_DOMAINS.some((d) => host === d || host.endsWith('.' + d));
+    if (!isDiskWala) return null;
+
+    console.log(`[Extractor] Resolving DiskWala link: ${urlStr}`);
+    const res = await axios.get(urlStr, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      timeout: 12000,
+    });
+
+    const html = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+    const ogTitle =
+      html.match(/<meta\s+property=["']og:title["']\s+content=["'](.*?)["']/i)?.[1] ||
+      html.match(/<title>(.*?)<\/title>/i)?.[1] ||
+      'DiskWala_Video';
+    const ogVideo =
+      html.match(/<meta\s+property=["']og:video["']\s+content=["'](.*?)["']/i)?.[1] ||
+      html.match(/<meta\s+property=["']og:video:url["']\s+content=["'](.*?)["']/i)?.[1] ||
+      html.match(/<source\s+src=["'](https?:\/\/[^"']+)["']/i)?.[1] ||
+      html.match(/["'](?:video_url|stream_url|download_url|file_url|direct_url)["']\s*:\s*["'](https?:\/\/[^"']+)["']/i)?.[1];
+    const ogImage = html.match(/<meta\s+property=["']og:image["']\s+content=["'](.*?)["']/i)?.[1] || '';
+    const sizeMatch = html.match(/(\d+(?:\.\d+)?\s*(?:GB|MB|KB|B))/i)?.[1] || '';
+
+    if (ogVideo) {
+      return {
+        success: true,
+        files: [
+          {
+            filename: ogTitle.replace(/ - DiskWala.*/i, '').trim(),
+            size: sizeMatch || 'Direct CDN',
+            size_bytes: 0,
+            download_link: ogVideo,
+            direct_link: ogVideo,
+            stream_link: ogVideo,
+            thumbnail: ogImage,
+            is_video: true,
+            is_directory: false,
+            fs_id: 'diskwala_' + Date.now(),
+          },
+        ],
+      };
+    }
+
+    // Try API endpoint
+    const fileIdMatch = parsed.pathname.match(/\/(?:d|view|f)\/([a-zA-Z0-9_-]+)/);
+    if (fileIdMatch && fileIdMatch[1]) {
+      const fileId = fileIdMatch[1];
+      try {
+        const apiRes = await axios.get(`https://diskwala.com/api/v1/file/${fileId}`, { timeout: 8000 });
+        if (apiRes.data && (apiRes.data.download_url || apiRes.data.url)) {
+          return {
+            success: true,
+            files: [
+              {
+                filename: apiRes.data.name || ogTitle,
+                size: formatBytes(apiRes.data.size || 0),
+                size_bytes: apiRes.data.size || 0,
+                download_link: apiRes.data.download_url || apiRes.data.url,
+                direct_link: apiRes.data.download_url || apiRes.data.url,
+                stream_link: apiRes.data.stream_url || apiRes.data.url,
+                thumbnail: apiRes.data.thumbnail || ogImage,
+                is_video: true,
+                is_directory: false,
+                fs_id: fileId,
+              },
+            ],
+          };
+        }
+      } catch {}
+    }
+
+    return {
+      success: false,
+      error: '⚠️ Could not extract video stream from this DiskWala link. Ensure the file is active and public.',
+    };
+  } catch (e) {
+    return { success: false, error: `DiskWala error: ${e.message}` };
+  }
+}
+
+/**
+ * Flezen Link Extractor
+ */
+async function extractFlezenLink(urlStr) {
+  try {
+    const parsed = new URL(urlStr.trim());
+    const host = parsed.hostname.toLowerCase();
+    const isFlezen = FLEZEN_DOMAINS.some((d) => host === d || host.endsWith('.' + d));
+    if (!isFlezen) return null;
+
+    console.log(`[Extractor] Resolving Flezen link: ${urlStr}`);
+    const res = await axios.get(urlStr, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      timeout: 12000,
+    });
+
+    const html = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
+    const ogTitle =
+      html.match(/<meta\s+property=["']og:title["']\s+content=["'](.*?)["']/i)?.[1] ||
+      html.match(/<title>(.*?)<\/title>/i)?.[1] ||
+      'Flezen_Video';
+    const ogVideo =
+      html.match(/<meta\s+property=["']og:video["']\s+content=["'](.*?)["']/i)?.[1] ||
+      html.match(/<source\s+src=["'](https?:\/\/[^"']+)["']/i)?.[1] ||
+      html.match(/["'](?:video_url|stream_url|download_url|file_url|url)["']\s*:\s*["'](https?:\/\/[^"']+)["']/i)?.[1];
+    const ogImage = html.match(/<meta\s+property=["']og:image["']\s+content=["'](.*?)["']/i)?.[1] || '';
+    const sizeMatch = html.match(/(\d+(?:\.\d+)?\s*(?:GB|MB|KB|B))/i)?.[1] || '';
+
+    if (ogVideo) {
+      return {
+        success: true,
+        files: [
+          {
+            filename: ogTitle.replace(/ - Flezen.*/i, '').trim(),
+            size: sizeMatch || 'Flezen CDN',
+            size_bytes: 0,
+            download_link: ogVideo,
+            direct_link: ogVideo,
+            stream_link: ogVideo,
+            thumbnail: ogImage,
+            is_video: true,
+            is_directory: false,
+            fs_id: 'flezen_' + Date.now(),
+          },
+        ],
+      };
+    }
+
+    return {
+      success: false,
+      error: '⚠️ Could not extract video stream from this Flezen link.',
+    };
+  } catch (e) {
+    return { success: false, error: `Flezen error: ${e.message}` };
+  }
+}
+
+/**
  * Main Extract Function combining all strategies with automatic fallback
  * @param {string} rawUrl 
  * @param {string} password 
@@ -609,12 +807,50 @@ async function extractTeraBox(rawUrl, password = '') {
     }
   }
 
-  // 2. Resolve any shortlink or redirect to a surl
+  // 2. Check if it's a DiskWala link
+  const diskWalaRes = await extractDiskWalaLink(rawUrl);
+  if (diskWalaRes) {
+    if (diskWalaRes.success && diskWalaRes.files && diskWalaRes.files.length > 0) {
+      return {
+        success: true,
+        surl: rawUrl,
+        totalFiles: diskWalaRes.files.length,
+        files: diskWalaRes.files,
+      };
+    }
+    if (diskWalaRes.error) {
+      return {
+        success: false,
+        error: diskWalaRes.error,
+      };
+    }
+  }
+
+  // 3. Check if it's a Flezen link
+  const flezenRes = await extractFlezenLink(rawUrl);
+  if (flezenRes) {
+    if (flezenRes.success && flezenRes.files && flezenRes.files.length > 0) {
+      return {
+        success: true,
+        surl: rawUrl,
+        totalFiles: flezenRes.files.length,
+        files: flezenRes.files,
+      };
+    }
+    if (flezenRes.error) {
+      return {
+        success: false,
+        error: flezenRes.error,
+      };
+    }
+  }
+
+  // 4. Resolve TeraBox surl from URL or redirector
   const resolved = await resolveToTeraBoxSurl(rawUrl);
   if (!resolved.surl) {
     return {
       success: false,
-      error: resolved.error || 'Invalid TeraBox URL format. Please provide a valid link from terabox.com, teraboxapp.com, 1024tera.com, or supported shortlinks.',
+      error: resolved.error || 'Invalid link format. Please provide a valid link from TeraBox, DiskWala, Flezen, or supported shortlinks.',
     };
   }
 
@@ -664,10 +900,16 @@ async function extractTeraBox(rawUrl, password = '') {
 
 module.exports = {
   TERABOX_DOMAINS,
+  DISKWALA_DOMAINS,
+  FLEZEN_DOMAINS,
+  SHORTENER_DOMAINS,
   isValidTeraBoxUrl,
   extractShortCode,
   extractUrlsFromText,
   resolveToTeraBoxSurl,
+  extractDiskWalaLink,
+  extractFlezenLink,
+  extractNowPlayLink,
   formatBytes,
   isVideoFile,
   extractTeraBox,

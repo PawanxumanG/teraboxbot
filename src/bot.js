@@ -68,26 +68,35 @@ function createBot() {
     }
 
     const welcomeMsg =
-      `👋 *Welcome to TeraBox Fast Downloader & Streamer*, ${name}!\n\n` +
-      `Send any TeraBox link to instantly get direct high-speed video streams and downloads — bypassing app requirements, speed caps, and ads!\n\n` +
+      `👋 *Welcome to TeraBox, DiskWala & Flezen Downloader*, ${name}!\n\n` +
+      `Send any supported link to instantly get direct high-speed video streams and downloads — bypassing app requirements, speed caps, and ads!\n\n` +
       `📊 *Your Account Status:*\n${statusText}\n\n` +
-      `👇 *Send a TeraBox link or choose an option below:*`;
+      `👇 *Send a link or choose an option below:*`;
 
     await ctx.reply(welcomeMsg, {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '⚡ 24-Hour VIP Pass (₹10)', callback_data: 'plan_24h' },
-            { text: '👑 30-Day Monthly (₹49)', callback_data: 'plan_30d' },
+            { text: '⚡ 24h Pass (₹10)', callback_data: 'plan_24h' },
+            { text: '📦 10-Day Pass (₹29)', callback_data: 'plan_10d' },
           ],
           [
-            { text: '📊 My Status & Quota', callback_data: 'check_status' },
-            { text: '❓ Help & Supported Links', callback_data: 'help_info' },
+            { text: '👑 30-Day Pass (₹49)', callback_data: 'plan_30d' },
+            { text: '🌟 90-Day VIP (₹139)', callback_data: 'plan_90d' },
+          ],
+          [
+            { text: '🌐 Supported Domains', callback_data: 'show_domains' },
+            { text: '📊 My Account Status', callback_data: 'check_status' },
           ],
         ],
       },
     });
+  });
+
+  // /domains command
+  bot.command('domains', async (ctx) => {
+    await sendDomainsMessage(ctx);
   });
 
   // /buy or /upgrade command
@@ -225,14 +234,18 @@ function createBot() {
     await sendHelpMessage(ctx);
   });
 
-  bot.action('plan_24h', async (ctx) => {
+  bot.action('show_domains', async (ctx) => {
     await ctx.answerCbQuery();
-    await handlePlanSelected(ctx, '24h');
+    await sendDomainsMessage(ctx);
   });
 
-  bot.action('plan_30d', async (ctx) => {
+  // Dynamic VIP plan selection
+  bot.action(/^plan_(.+)$/, async (ctx) => {
     await ctx.answerCbQuery();
-    await handlePlanSelected(ctx, '30d');
+    const planId = ctx.match[1];
+    if (config.PLANS[planId]) {
+      await handlePlanSelected(ctx, planId);
+    }
   });
 
   bot.action(/^submit_utr_(.+)$/, async (ctx) => {
@@ -243,7 +256,7 @@ function createBot() {
     session.awaitingUtr = true;
 
     await ctx.reply(
-      `✍️ *Submit 12-Digit UTR for ${config.PLANS[planId].name}:*\n\n` +
+      `✍️ *Submit 12-Digit UTR for ${config.PLANS[planId]?.name || 'VIP'}:*\n\n` +
       `Please reply with your *12-digit UTR / UPI Transaction Reference Number* (or send \`/utr <number>\`).`,
       {
         parse_mode: 'Markdown',
@@ -282,25 +295,26 @@ function createBot() {
       return handleTeraBoxLink(ctx, urls[0]);
     }
 
-    // 3. Fallback check for bare shortcodes or TeraBox links without scheme
-    if (extractor.isValidTeraBoxUrl(text) || text.startsWith('terabox.com') || text.startsWith('1024tera.com')) {
+    // 3. Fallback check for bare shortcodes or supported links without scheme
+    if (extractor.isValidTeraBoxUrl(text) || text.startsWith('terabox.com') || text.startsWith('1024tera.com') || text.startsWith('diskwala') || text.startsWith('flezen')) {
       const fullUrl = text.startsWith('http') ? text : `https://${text}`;
       return handleTeraBoxLink(ctx, fullUrl);
     }
 
     // Default response for non-URL messages
     await ctx.reply(
-      `🤖 *Send me any TeraBox link to download or stream!*\n\n` +
-      `Supported domains & shortlinks include:\n` +
-      `• \`terabox.com\`, \`teraboxapp.com\`\n` +
-      `• \`1024tera.com\`, \`1024terabox.com\`\n` +
-      `• \`teraboxshare.com\`, \`teraboxlink.com\`\n` +
-      `• \`mirrobox.com\`, \`4funbox.com\`, \`nephobox.com\`\n` +
-      `• \`nowplaytoc.com\`, \`bit.ly\`, and all TeraBox redirectors`,
+      `🤖 *Send me any supported link to download or stream!*\n\n` +
+      `⚡ *Supported Services:*\n` +
+      `• 📦 *TeraBox Mirrors:* \`terabox.com\`, \`1024tera.com\`, \`mirrobox.com\`, \`nephobox.com\`, etc.\n` +
+      `• ⚡ *DiskWala:* \`diskwala.com\`, \`disk.diskwala.com\`, \`diskwala.in\`\n` +
+      `• 🚀 *Flezen:* \`flezen.com\`, \`flezen.org\`, \`flezen.cc\`\n` +
+      `• 🔗 *Shortlinks:* \`nowplaytoc.com\`, \`hugeboxlightning.com\`, \`cashsnap.com\`, etc.\n\n` +
+      `_Send \`/domains\` to view the full list of 30+ supported domains._`,
       {
         parse_mode: 'Markdown',
         reply_markup: {
           inline_keyboard: [
+            [{ text: '🌐 View All Supported Domains', callback_data: 'show_domains' }],
             [{ text: '👑 Upgrade to VIP (Unlimited)', callback_data: 'upgrade_menu' }],
             [{ text: '📊 Check My Quota', callback_data: 'check_status' }],
           ],
@@ -317,24 +331,38 @@ function createBot() {
  */
 async function sendPlanSelection(ctx) {
   const msg =
-    `👑 *Upgrade to TeraBox VIP Pass*\n\n` +
+    `👑 *Choose Your VIP Subscription Pass*\n\n` +
     `⚡ *24-Hour Instant Pass: ₹10*\n` +
-    `• Unlimited downloads for 24 hours\n` +
-    `• High-speed 1080p video streaming\n` +
-    `• Max file size: 2GB\n\n` +
+    `• Unlimited downloads & 1080p stream for 24h\n\n` +
+    `📦 *10-Day VIP Pass: ₹29*\n` +
+    `• Superfast download, 0 daily limit & folder support\n\n` +
     `👑 *30-Day Monthly Pass: ₹49*\n` +
-    `• Unlimited downloads for 30 days\n` +
-    `• Max file size: 2GB\n` +
-    `• Zero queue & priority processing\n\n` +
-    `👇 *Select your VIP pass to proceed with instant UPI:*`;
+    `• Unlimited downloads up to 2GB, priority processing\n\n` +
+    `🌟 *90-Day VIP Pass: ₹139*\n` +
+    `• 3 months unthrottled downloads & zero queue\n\n` +
+    `💎 *1-Year VIP Pass: ₹349*\n` +
+    `• Full year unlimited access with maximum bandwidth\n\n` +
+    `👇 *Select a plan to pay instantly via UPI QR:*`;
 
   await ctx.reply(msg, {
     parse_mode: 'Markdown',
     reply_markup: {
       inline_keyboard: [
-        [{ text: '⚡ 24-Hour Pass (₹10)', callback_data: 'plan_24h' }],
-        [{ text: '👑 30-Day Monthly Pass (₹49)', callback_data: 'plan_30d' }],
-        [{ text: '📊 My Status', callback_data: 'check_status' }],
+        [
+          { text: '⚡ 24 Hours (₹10)', callback_data: 'plan_24h' },
+          { text: '📦 10 Days (₹29)', callback_data: 'plan_10d' },
+        ],
+        [
+          { text: '👑 30 Days (₹49)', callback_data: 'plan_30d' },
+          { text: '🌟 90 Days (₹139)', callback_data: 'plan_90d' },
+        ],
+        [
+          { text: '💎 1 Year Pass (₹349)', callback_data: 'plan_365d' },
+        ],
+        [
+          { text: '🌐 Supported Domains', callback_data: 'show_domains' },
+          { text: '📊 My Account Status', callback_data: 'check_status' },
+        ],
       ],
     },
   });
@@ -593,24 +621,60 @@ async function sendStatusMessage(ctx) {
 }
 
 /**
+ * Send Supported Domains Message
+ */
+async function sendDomainsMessage(ctx) {
+  const msg =
+    `🌐 *All Supported Links & Domains*\n\n` +
+    `📦 *TeraBox & Official Mirrors (24+ Domains):*\n` +
+    `• \`terabox.com\`, \`teraboxapp.com\`\n` +
+    `• \`1024tera.com\`, \`1024terabox.com\`\n` +
+    `• \`teraboxshare.com\`, \`teraboxlink.com\`\n` +
+    `• \`mirrobox.com\`, \`nephobox.com\`, \`4funbox.com\`\n` +
+    `• \`freeterabox.com\`, \`momerybox.com\`, \`tibibox.com\`\n` +
+    `• \`gibibox.com\`, \`terabox.fun\`, \`terasharelink.com\`\n` +
+    `• \`terafileshare.com\`, \`teraboxurl.com\`, \`dubox.com\`\n` +
+    `• \`terabox.me\`, \`terabox.app\`, \`box.guide\`\n\n` +
+    `⚡ *DiskWala Domains:*\n` +
+    `• \`diskwala.com\`, \`disk.diskwala.com\`\n` +
+    `• \`diskwala.in\`, \`diskwala.tech\`, \`diskwala.online\`\n` +
+    `• \`diskwala.link\`, \`disk.media\`\n\n` +
+    `🚀 *Flezen Domains:*\n` +
+    `• \`flezen.com\`, \`flezen.org\`, \`flezen.cc\`\n` +
+    `• \`flezen.xyz\`, \`flezen.in\`, \`flezen.app\`\n\n` +
+    `🔗 *Affiliate Shortlinks & Redirectors:*\n` +
+    `• \`nowplaytoc.com\`, \`nowplaylee.com\`, \`nowplaygo.com\`\n` +
+    `• \`hugeboxlightning.com\`, \`hugeboxstack.com\`\n` +
+    `• \`cashsnap.com\`, \`cashsnap.in\`, \`yt1s.click\`\n` +
+    `• \`bit.ly\`, \`tinyurl.com\`, and all direct shortlinks\n\n` +
+    `✨ *Simply copy and send any link from these services into the chat!*`;
+
+  await ctx.reply(msg, {
+    parse_mode: 'Markdown',
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: '👑 Upgrade to VIP', callback_data: 'upgrade_menu' }],
+        [{ text: '📊 Check My Quota', callback_data: 'check_status' }],
+      ],
+    },
+  });
+}
+
+/**
  * Send Help Message
  */
 async function sendHelpMessage(ctx) {
   const msg =
-    `📖 *TeraBox Bot Usage Guide*\n\n` +
+    `📖 *TeraBox, DiskWala & Flezen Bot Usage Guide*\n\n` +
     `*How to use:* \n` +
-    `1. Just copy and send any TeraBox link to this chat.\n` +
-    `2. The bot will extract direct high-speed download & streaming links.\n` +
-    `3. Small videos/files (<50MB) are sent directly inside Telegram.\n` +
-    `4. Larger files (>50MB up to 2GB) receive instant CDN direct download and online video streaming links.\n\n` +
-    `*Supported Domains:*\n` +
-    `• \`terabox.com\`, \`teraboxapp.com\`\n` +
-    `• \`1024tera.com\`, \`1024terabox.com\`\n` +
-    `• \`teraboxshare.com\`, \`teraboxlink.com\`\n` +
-    `• \`mirrobox.com\`, \`nephobox.com\`, \`4funbox.com\`\n\n` +
+    `1. Just copy and send any supported link to this chat.\n` +
+    `2. The bot extracts direct high-speed download & streaming links instantly.\n` +
+    `3. Small videos/files (<50MB) are delivered directly inside Telegram.\n` +
+    `4. Large videos/files receive ultra-fast CDN download & streaming players.\n\n` +
     `*Commands:*\n` +
     `• \`/start\` - Main menu & status\n` +
-    `• \`/buy\` - Upgrade to VIP (₹10 / ₹49)\n` +
+    `• \`/domains\` - View all 30+ supported domains\n` +
+    `• \`/buy\` - View VIP plans & packages\n` +
     `• \`/status\` - Check remaining downloads\n` +
     `• \`/utr <12_digits>\` - Verify UPI transaction`;
 
@@ -618,6 +682,7 @@ async function sendHelpMessage(ctx) {
     parse_mode: 'Markdown',
     reply_markup: {
       inline_keyboard: [
+        [{ text: '🌐 View All Supported Domains', callback_data: 'show_domains' }],
         [{ text: '👑 Upgrade to VIP', callback_data: 'upgrade_menu' }],
         [{ text: '📊 My Status', callback_data: 'check_status' }],
       ],
