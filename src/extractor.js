@@ -484,12 +484,132 @@ async function extractViaPublicGateways(surl) {
 }
 
 /**
+ * NowPlay / CashSnap Shortlink Extractor
+ */
+async function extractNowPlayLink(urlStr) {
+  try {
+    const parsed = new URL(urlStr.trim());
+    const host = parsed.hostname.toLowerCase();
+    const isNowPlayHost = [
+      'nowplaytoc.com',
+      'nowplaylee.com',
+      'nowplaygo.com',
+      'hugeboxlightning.com',
+      'hugeboxstack.com',
+      'cashsnap.com',
+    ].some((d) => host === d || host.endsWith('.' + d));
+
+    const codeMatch = parsed.pathname.match(/\/(\d{15,})/);
+    if (!isNowPlayHost && !codeMatch) {
+      return null;
+    }
+
+    const linkId = codeMatch ? codeMatch[1] : parsed.pathname.replace(/^\/+/, '');
+    if (!linkId) return null;
+
+    const token = '3af5cacb-8cdb-4138-8763-62b4cce7d991';
+    const apis = [
+      'https://api.cshsnpcwio.com/v1/h5_open_data',
+      'https://api.cashsnapnowhawk.com/v1/h5_open_data',
+    ];
+
+    for (const api of apis) {
+      try {
+        const res = await axios.post(
+          api,
+          {
+            uid: '',
+            dir_id: '',
+            link_id: linkId,
+            open_link: true,
+            page_size: 100,
+            current_page: 1,
+            tag: 1,
+            h5_event: false,
+          },
+          {
+            headers: {
+              iat: token,
+              'Content-Type': 'application/json',
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            },
+            timeout: 10000,
+          }
+        );
+
+        const data = res.data;
+        if (data && data.files && Array.isArray(data.files) && data.files.length > 0) {
+          const results = [];
+          for (const item of data.files) {
+            const meta = item.file_meta || item;
+            const filename = meta.display_name || meta.name || 'NowPlay_File';
+            const sizeBytes = parseInt(meta.size || 0, 10);
+            const dlink = meta.link || meta.download_url || meta.play_url || urlStr;
+            const thumb = meta.thumbnail || '';
+
+            results.push({
+              filename,
+              size: formatBytes(sizeBytes),
+              size_bytes: sizeBytes,
+              download_link: dlink,
+              direct_link: dlink,
+              stream_link: meta.play_url || dlink,
+              thumbnail: thumb,
+              is_video: isVideoFile(filename) || meta.type === 'VIDEO',
+              is_directory: false,
+              fs_id: meta.id || linkId,
+            });
+          }
+          return { success: true, files: results };
+        }
+
+        if (data && data.msg === 'NO_DATA') {
+          return {
+            success: false,
+            error: '⚠️ This shortlink has expired or the file was deleted by its uploader on NowPlay / CashSnap.',
+          };
+        }
+      } catch (e) {
+        console.warn(`[NowPlay API] Error for ${api}:`, e.message);
+      }
+    }
+
+    return {
+      success: false,
+      error: '⚠️ Unable to resolve this shortlink. The link may be inactive or expired.',
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Main Extract Function combining all strategies with automatic fallback
  * @param {string} rawUrl 
  * @param {string} password 
  */
 async function extractTeraBox(rawUrl, password = '') {
-  // First resolve any shortlink or redirect to a surl
+  // 1. Check if it's a NowPlay / CashSnap shortlink
+  const nowPlayRes = await extractNowPlayLink(rawUrl);
+  if (nowPlayRes) {
+    if (nowPlayRes.success && nowPlayRes.files && nowPlayRes.files.length > 0) {
+      return {
+        success: true,
+        surl: rawUrl,
+        totalFiles: nowPlayRes.files.length,
+        files: nowPlayRes.files,
+      };
+    }
+    if (nowPlayRes.error) {
+      return {
+        success: false,
+        error: nowPlayRes.error,
+      };
+    }
+  }
+
+  // 2. Resolve any shortlink or redirect to a surl
   const resolved = await resolveToTeraBoxSurl(rawUrl);
   if (!resolved.surl) {
     return {
