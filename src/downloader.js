@@ -201,6 +201,11 @@ async function deliverFile(ctx, file, quota) {
       } catch {}
     } catch (err) {
       console.error('[Downloader] Direct upload error:', err.message);
+      // Clean up the progress status message immediately so it doesn't stay stuck in chat
+      try {
+        await ctx.deleteMessage(statusMsg.message_id);
+      } catch {}
+
       // Fallback to providing high-speed direct download link
       const fallbackCaption =
         `⚡ *Direct Download & Stream Ready!*\n\n` +
