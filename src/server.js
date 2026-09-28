@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const { Telegram } = require('telegraf');
 const config = require('./config');
 const database = require('./database');
 const extractor = require('./extractor');
@@ -7,6 +8,9 @@ const extractor = require('./extractor');
 function createServer(bot) {
   const app = express();
   app.use(express.json());
+
+  // Initialize Telegram client (works even in standalone dashboard mode)
+  const telegram = bot?.telegram || (config.BOT_TOKEN ? new Telegram(config.BOT_TOKEN) : null);
 
   // Serve Dashboard static files
   const publicDir = path.join(__dirname, '..', 'public');
@@ -45,7 +49,7 @@ function createServer(bot) {
       res.json({
         ...stats,
         uptime: process.uptime(),
-        botOnline: Boolean(bot),
+        botOnline: Boolean(telegram),
         vpa: config.UPI.VPA,
       });
     } catch (e) {
@@ -71,9 +75,9 @@ function createServer(bot) {
       const durationDays = parseInt(days, 10) || 30;
 
       const result = await database.manualGrantVip(userId, durationDays);
-      if (result.success && bot) {
+      if (result.success && telegram) {
         const expStr = new Date(result.vipUntil).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        bot.telegram.sendMessage(
+        telegram.sendMessage(
           userId,
           `🎉 *VIP Access Granted!*\n\nAn administrator has granted you *${durationDays} days of VIP Pass*!\n📅 Valid until: \`${expStr} IST\`\n⚡ Enjoy unlimited downloads!`,
           { parse_mode: 'Markdown' }
@@ -114,9 +118,9 @@ function createServer(bot) {
     try {
       const { userId, message } = req.body;
       if (!userId || !message) return res.status(400).json({ error: 'Missing userId or message' });
-      if (!bot) return res.status(500).json({ error: 'Bot instance not ready' });
+      if (!telegram) return res.status(500).json({ error: 'Telegram Bot Token not configured' });
 
-      await bot.telegram.sendMessage(userId, `💬 *Message from Admin:*\n\n${message}`, {
+      await telegram.sendMessage(userId, `💬 *Message from Admin:*\n\n${message}`, {
         parse_mode: 'Markdown',
       });
       res.json({ success: true });
@@ -152,14 +156,14 @@ function createServer(bot) {
     try {
       const { message } = req.body;
       if (!message) return res.status(400).json({ error: 'Missing message' });
-      if (!bot) return res.status(500).json({ error: 'Bot instance not ready' });
+      if (!telegram) return res.status(500).json({ error: 'Telegram Bot Token not configured' });
 
       const userIds = await database.getAllUserIds();
       let sent = 0;
 
       for (const u of userIds) {
         try {
-          await bot.telegram.sendMessage(u, `📢 *Announcement*\n\n${message}`, {
+          await telegram.sendMessage(u, `📢 *Announcement*\n\n${message}`, {
             parse_mode: 'Markdown',
           });
           sent++;
@@ -208,9 +212,9 @@ function createServer(bot) {
 
         if (targetUserId && utr) {
           const result = await database.verifyAndRedeemUtr(targetUserId, utr, planId);
-          if (result.success && bot) {
+          if (result.success && telegram) {
             const expDate = new Date(result.vipUntil).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-            bot.telegram.sendMessage(
+            telegram.sendMessage(
               targetUserId,
               `🎉 *Instant VIP Activation!*\n\n` +
               `Your payment of ₹${result.amount} via UPI (UTR: \`${utr}\`) was verified automatically.\n` +
